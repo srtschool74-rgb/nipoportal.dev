@@ -1,4 +1,3 @@
-import { getCachedServerSession } from "@/backend/auth/sessionCache";
 import HomeClient from "./HomeClient";
 import { getSystemSettings } from "@/backend/api/actions/dashboard/admin/settings/actions";
 
@@ -12,11 +11,6 @@ export default async function Home(props: HomeProps) {
     searchParams = (await props?.searchParams) || {};
   } catch {}
 
-  let session: any = null;
-  try {
-    session = await getCachedServerSession();
-  } catch {}
-
   let schoolName = "SRT UNIVERSAL SCHOOL";
   let schoolLogo = "/logo/srt-logo.svg";
   try {
@@ -28,13 +22,13 @@ export default async function Home(props: HomeProps) {
     if (settings.SCHOOL_LOGO) schoolLogo = settings.SCHOOL_LOGO;
   } catch {}
 
-  // Pass active role (if any) to HomeClient so the full home animation plays reliably on every open and logout
+  // Home animation plays cleanly on every open and logout
   return (
     <HomeClient
       schoolName={schoolName}
       schoolLogo={schoolLogo}
       initialError={searchParams.error}
-      authenticatedRole={session?.user?.role || null}
+      authenticatedRole={null}
     />
   );
 }

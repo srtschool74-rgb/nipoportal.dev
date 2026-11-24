@@ -13,7 +13,10 @@ export const getCachedServerSession = cache(async () => {
       return null;
     }
     return await getServerSession(getAuthOptions());
-  } catch (err) {
+  } catch (err: any) {
+    if (err?.digest === "DYNAMIC_SERVER_USAGE" || err?.digest?.startsWith?.("NEXT_")) {
+      throw err;
+    }
     console.warn("[SessionCache] Warning fetching session:", err);
     return null;
   }

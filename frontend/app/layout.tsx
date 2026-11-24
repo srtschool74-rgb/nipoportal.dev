@@ -1,6 +1,5 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
-import { getCachedServerSession } from "@/backend/auth/sessionCache";
 import NavigationProgressBar from "@/frontend/components/NavigationProgressBar";
 import { ThemeProvider } from "@/frontend/components/ThemeProvider";
 import { ConfirmDialogProvider } from "@/frontend/components/ui/ConfirmDialog";
@@ -174,22 +173,8 @@ export default async function RootLayout({
   })();
   `;
 
-  let initialTheme = defaultThemeMode === "system" ? "light" : defaultThemeMode; // fallback for server render
-  let isAuthenticated = false;
-
-  let session: any = null;
-  try {
-    session = await getCachedServerSession();
-  } catch (err) {
-    console.warn("[RootLayout] getCachedServerSession note:", err);
-  }
-
-  if (session?.user) {
-    isAuthenticated = true;
-    if (session.user.theme) {
-      initialTheme = session.user.theme;
-    }
-  }
+  const initialTheme = defaultThemeMode === "system" ? "light" : defaultThemeMode;
+  const isAuthenticated = false;
 
   // Verified JSON-LD structured data
   const orgName = settings.SCHOOL_NAME || "School Portal";

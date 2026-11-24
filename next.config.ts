@@ -16,6 +16,7 @@ const cspHeader = `
 `;
 
 const nextConfig: NextConfig = {
+  serverExternalPackages: ['unpdf', 'tesseract.js'],
   typescript: {
     // Keep strict types during local test suite, but avoid edge compiler exits on CI
     ignoreBuildErrors: false,

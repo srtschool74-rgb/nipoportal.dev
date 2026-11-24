@@ -152,7 +152,7 @@ function getClientIp(req: NextRequest): string {
 // -----------------------------------------------------------------------------
 // 4. MAIN EDGE FIREWALL MIDDLEWARE
 // -----------------------------------------------------------------------------
-export async function middleware(req: NextRequest) {
+export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
   // Instant bypass for AWS Amplify deployment health probes and monitoring
