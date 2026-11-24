@@ -1,7 +1,7 @@
 import nodemailer from "nodemailer";
 
 export function getSmtpTransporter() {
-  const smtpEmail = process.env.SMTP_EMAIL?.trim() || "nishanthv041@gmail.com";
+  const smtpEmail = process.env.SMTP_EMAIL?.trim() || "srtschool74@gmail.com";
   const smtpPassword = process.env.SMTP_PASSWORD?.trim().replace(/\s+/g, "") || "clfpizovhfpdmrpw";
 
   const host = process.env.SMTP_HOST || "smtp.gmail.com";

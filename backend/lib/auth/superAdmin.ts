@@ -1,6 +1,7 @@
 export const SUPER_ADMIN_EMAILS = [
   "jpranav116@gmail.com",
   "nishanthv041@gmail.com",
+  "srtschool74@gmail.com",
 ] as const;
 
 export function isSuperAdmin(email: string | null | undefined): boolean {
