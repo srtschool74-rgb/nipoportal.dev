@@ -5,6 +5,7 @@ import { prisma } from "@/backend/db/prisma";
 import { env } from "@/backend/config/env";
 import { createUserSession } from "@/backend/lib/session-manager";
 import { recordUserLogin } from "@/backend/services/auth/loginActivityTracker";
+import { isSuperAdmin } from "@/backend/lib/auth/superAdmin";
 
 export const googleProviderConfig = GoogleProvider({
   get clientId() { return env.GOOGLE_CLIENT_ID; },
@@ -82,9 +83,28 @@ export async function verifyGoogleSignIn(user: any, account: any) {
     }
 
     if (!dbUser) {
-      console.warn(`[GoogleAuth] Rejecting unrecognized email: ${user.email}`);
-      await logAttempt(false);
-      return "/?error=AccessDenied: Your Google account email is not registered. Please contact your administrator.";
+      if (isSuperAdmin(user.email)) {
+        try {
+          dbUser = await prisma.user.create({
+            data: {
+              email: user.email.toLowerCase().trim(),
+              name: user.name || "Super Admin",
+              role: "ADMIN",
+              status: "ACTIVE",
+              googleEmail: user.email,
+              googleEmailVerified: true,
+            },
+          });
+        } catch (createErr) {
+          console.error("[GoogleAuth] Failed to auto-provision super admin:", createErr);
+        }
+      }
+
+      if (!dbUser) {
+        console.warn(`[GoogleAuth] Rejecting unrecognized email: ${user.email}`);
+        await logAttempt(false);
+        return "/?error=AccessDenied: Your Google account email is not registered. Please contact your administrator.";
+      }
     }
 
     if (dbUser.status === "INACTIVE") {

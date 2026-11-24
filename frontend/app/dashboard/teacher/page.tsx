@@ -56,21 +56,21 @@ export default async function TeacherDashboard() {
         teacherId: teacher.id,
         deadline: { gte: todayDate }
       }
-    }),
+    }).catch(() => 0),
     prisma.message.count({
       where: {
         receiverId: session.user.id,
         isRead: false,
       }
-    }),
-    getEffectiveTimetable({ teacherId: teacher.id }, todayDate),
+    }).catch(() => 0),
+    getEffectiveTimetable({ teacherId: teacher.id }, todayDate).catch(() => []),
     prisma.teacherAbsence.findFirst({
       where: {
         teacherId: teacher.id,
         date: todayDate,
         status: "ACTIVE"
       }
-    }),
+    }).catch(() => null),
     prisma.calendarEvent.findMany({
       where: {
         date: { gte: todayDate },
@@ -78,7 +78,7 @@ export default async function TeacherDashboard() {
       },
       orderBy: { date: 'asc' },
       take: 4
-    }),
+    }).catch(() => []),
     prisma.meeting.findMany({
       where: {
         teachers: { some: { id: teacher.id } },
@@ -87,7 +87,7 @@ export default async function TeacherDashboard() {
       include: { parents: { include: { user: true } } },
       orderBy: [{ date: 'asc' }, { time: 'asc' }],
       take: 3
-    })
+    }).catch(() => [])
   ]);
 
   // Combine regular schedule and assigned substitution duties from getEffectiveTimetable
@@ -173,7 +173,7 @@ export default async function TeacherDashboard() {
           (EXTRACT(MONTH FROM s."dateOfBirth") = ${schoolToday.month} AND EXTRACT(DAY FROM s."dateOfBirth") = ${schoolToday.day})
           ${isNonLeapFeb28 ? Prisma.sql`OR (EXTRACT(MONTH FROM s."dateOfBirth") = 2 AND EXTRACT(DAY FROM s."dateOfBirth") = 29)` : Prisma.empty}
         );
-    `;
+    `.catch(() => []);
   }
 
   return (

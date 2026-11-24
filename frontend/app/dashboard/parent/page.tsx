@@ -89,13 +89,14 @@ export default async function ParentDashboard({
       orderBy: { date: 'desc' },
       take: 60,
       select: { id: true, status: true, date: true, remarks: true }
-    }),
-    selectedChild.classId ? fetchLatestExam(selectedChild.classId) : Promise.resolve(null),
-    getSchoolCalendarStats(new Date(), selectedChild.classId),
-    selectedChild.classId
+    }).catch(() => []),
+    (selectedChild.classId ? fetchLatestExam(selectedChild.classId) : Promise.resolve(null)).catch(() => null),
+    getSchoolCalendarStats(new Date(), selectedChild.classId).catch(() => ({ totalActiveDays: 0, holidays: [] })),
+    (selectedChild.classId
       ? getEffectiveTimetable({ classId: selectedChild.classId }, todayDate)
-      : Promise.resolve([]),
-    selectedChild.classId
+      : Promise.resolve([])
+    ).catch(() => []),
+    (selectedChild.classId
       ? prisma.timetable.findMany({
           where: { classId: selectedChild.classId },
           select: {
@@ -120,7 +121,8 @@ export default async function ParentDashboard({
           },
           orderBy: [{ period: "asc" }, { startTime: "asc" }],
         })
-      : Promise.resolve([]),
+      : Promise.resolve([])
+    ).catch(() => []),
   ]);
 
   const childClass = selectedChild.class;

@@ -54,19 +54,32 @@ export default async function AdminDashboardPage({
 
   const resolvedSearchParams = await searchParams;
 
-  const [totalStudents, totalTeachers, parentRecordCount, parentUserCount, totalClasses, uniqueSubjects, classes] = await Promise.all([
-    prisma.student.count({ where: { isActive: true } }),
-    prisma.teacher.count({ where: { isActive: true } }),
-    prisma.parent.count({ where: { isActive: true } }),
-    prisma.user.count({ where: { role: 'PARENT', status: 'ACTIVE' } }),
-    prisma.class.count({ where: { isActive: true } }),
-    prisma.subject.findMany({ distinct: ['name'], select: { name: true } }),
-    prisma.class.findMany({
-      where: { isActive: true },
-      select: { id: true, name: true, section: true },
-      orderBy: [{ name: 'asc' }, { section: 'asc' }]
-    })
-  ]);
+  let totalStudents = 0;
+  let totalTeachers = 0;
+  let parentRecordCount = 0;
+  let parentUserCount = 0;
+  let totalClasses = 0;
+  let uniqueSubjects: { name: string }[] = [];
+  let classes: { id: string; name: string; section: string }[] = [];
+
+  try {
+    const res = await Promise.all([
+      prisma.student.count({ where: { isActive: true } }).catch(() => 0),
+      prisma.teacher.count({ where: { isActive: true } }).catch(() => 0),
+      prisma.parent.count({ where: { isActive: true } }).catch(() => 0),
+      prisma.user.count({ where: { role: 'PARENT', status: 'ACTIVE' } }).catch(() => 0),
+      prisma.class.count({ where: { isActive: true } }).catch(() => 0),
+      prisma.subject.findMany({ distinct: ['name'], select: { name: true } }).catch(() => []),
+      prisma.class.findMany({
+        where: { isActive: true },
+        select: { id: true, name: true, section: true },
+        orderBy: [{ name: 'asc' }, { section: 'asc' }]
+      }).catch(() => [])
+    ]);
+    [totalStudents, totalTeachers, parentRecordCount, parentUserCount, totalClasses, uniqueSubjects, classes] = res;
+  } catch (err) {
+    console.error("Admin dashboard stats fetch error:", err);
+  }
 
   const totalParents = Math.max(parentRecordCount, parentUserCount);
 
@@ -88,144 +101,148 @@ export default async function AdminDashboardPage({
     const classId = resolvedSearchParams.classId;
     currentPage = Math.max(1, parseInt(resolvedSearchParams.page || "1", 10));
 
-    selectedClassData = await prisma.class.findUnique({
-      where: { id: classId },
-      select: {
-        id: true,
-        name: true,
-        section: true,
-        teacherId: true,
-        teacher: {
-          select: {
-            id: true,
-            phone: true,
-            user: {
-              select: {
-                id: true,
-                name: true,
-                email: true,
+    try {
+      selectedClassData = await prisma.class.findUnique({
+        where: { id: classId },
+        select: {
+          id: true,
+          name: true,
+          section: true,
+          teacherId: true,
+          teacher: {
+            select: {
+              id: true,
+              phone: true,
+              user: {
+                select: {
+                  id: true,
+                  name: true,
+                  email: true,
+                },
               },
             },
           },
         },
-      },
-    });
+      }).catch(() => null);
 
-    if (selectedClassData) {
-      const todayStart = startOfSchoolDay();
-      const todayEnd = endOfSchoolDay();
+      if (selectedClassData) {
+        const todayStart = startOfSchoolDay();
+        const todayEnd = endOfSchoolDay();
 
-      const [sectionCountRes, totalClassStudentsRes, studentsDataRes, teachersDataRes, todaysAttendancesRes, marksRes] = await Promise.all([
-        prisma.class.count({ where: { name: selectedClassData.name, isActive: true } }),
-        prisma.student.count({ where: { classId, isActive: true } }),
-        prisma.student.findMany({
-          where: { classId, isActive: true },
-          orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
-          take: pageSize,
-          skip: (currentPage - 1) * pageSize,
-          select: {
-            id: true,
-            rollNumber: true,
-            firstName: true,
-            lastName: true,
-            isActive: true,
-            parents: {
-              select: {
-                parent: {
-                  select: {
-                    id: true,
-                    phone: true,
-                    user: {
-                      select: {
-                        id: true,
-                        name: true,
-                        email: true,
+        const [sectionCountRes, totalClassStudentsRes, studentsDataRes, teachersDataRes, todaysAttendancesRes, marksRes] = await Promise.all([
+          prisma.class.count({ where: { name: selectedClassData.name, isActive: true } }).catch(() => 0),
+          prisma.student.count({ where: { classId, isActive: true } }).catch(() => 0),
+          prisma.student.findMany({
+            where: { classId, isActive: true },
+            orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
+            take: pageSize,
+            skip: (currentPage - 1) * pageSize,
+            select: {
+              id: true,
+              rollNumber: true,
+              firstName: true,
+              lastName: true,
+              isActive: true,
+              parents: {
+                select: {
+                  parent: {
+                    select: {
+                      id: true,
+                      phone: true,
+                      user: {
+                        select: {
+                          id: true,
+                          name: true,
+                          email: true,
+                        },
                       },
                     },
                   },
                 },
               },
+              attendances: { select: { status: true } },
             },
-            attendances: { select: { status: true } },
-          },
-        }),
-        prisma.teacher.findMany({
-          where: { isActive: true },
-          select: {
-            id: true,
-            userId: true,
-            user: {
-              select: {
-                id: true,
-                name: true,
-                email: true,
+          }).catch(() => []),
+          prisma.teacher.findMany({
+            where: { isActive: true },
+            select: {
+              id: true,
+              userId: true,
+              user: {
+                select: {
+                  id: true,
+                  name: true,
+                  email: true,
+                },
               },
             },
-          },
-          orderBy: { user: { name: 'asc' } },
-        }),
-        prisma.attendance.findMany({
-          where: {
-            OR: [
-              { classId },
-              { student: { classId } },
-            ],
-            date: { gte: todayStart, lte: todayEnd },
-          },
-          select: { status: true },
-        }),
-        prisma.mark.findMany({
-          where: { student: { classId } },
-          select: { studentId: true, examId: true, score: true, maxScore: true },
-          take: 500,
-          orderBy: { createdAt: 'desc' },
-        }),
-      ]);
+            orderBy: { user: { name: 'asc' } },
+          }).catch(() => []),
+          prisma.attendance.findMany({
+            where: {
+              OR: [
+                { classId },
+                { student: { classId } },
+              ],
+              date: { gte: todayStart, lte: todayEnd },
+            },
+            select: { status: true },
+          }).catch(() => []),
+          prisma.mark.findMany({
+            where: { student: { classId } },
+            select: { studentId: true, examId: true, score: true, maxScore: true },
+            take: 500,
+            orderBy: { createdAt: 'desc' },
+          }).catch(() => []),
+        ]);
 
-      sectionCount = sectionCountRes;
-      totalClassStudents = totalClassStudentsRes;
-      totalPages = Math.max(1, Math.ceil(totalClassStudents / pageSize));
-      studentsData = studentsDataRes as any;
-      teachersData = teachersDataRes;
-      const todaysAttendances = todaysAttendancesRes;
-      const marks = marksRes;
+        sectionCount = sectionCountRes;
+        totalClassStudents = totalClassStudentsRes;
+        totalPages = Math.max(1, Math.ceil(totalClassStudents / pageSize));
+        studentsData = (studentsDataRes || []) as any;
+        teachersData = teachersDataRes || [];
+        const todaysAttendances = todaysAttendancesRes || [];
+        const marks = marksRes || [];
 
-      attendanceStats.total = totalClassStudents;
-      todaysAttendances.forEach(att => {
-        if (att.status === 'PRESENT' || att.status === 'LATE') attendanceStats.present++;
-        if (att.status === 'ABSENT' || att.status === 'LEAVE') attendanceStats.absent++;
-      });
-
-      const classParentsSet = new Set<string>();
-      studentsData.forEach(s => {
-        s.parents.forEach(p => {
-          if (p.parent?.id) classParentsSet.add(p.parent.id);
+        attendanceStats.total = totalClassStudents;
+        todaysAttendances.forEach(att => {
+          if (att.status === 'PRESENT' || att.status === 'LATE') attendanceStats.present++;
+          if (att.status === 'ABSENT' || att.status === 'LEAVE') attendanceStats.absent++;
         });
-      });
-      classParentsCount = classParentsSet.size;
 
-      let passCount = 0;
-      let failCount = 0;
+        const classParentsSet = new Set<string>();
+        studentsData.forEach(s => {
+          s.parents?.forEach(p => {
+            if (p.parent?.id) classParentsSet.add(p.parent.id);
+          });
+        });
+        classParentsCount = classParentsSet.size;
 
-      const studentExams = new Map();
-      marks.forEach(m => {
-        const key = `${m.studentId}-${m.examId}`;
-        if (!studentExams.has(key)) studentExams.set(key, { total: 0, max: 0 });
-        const curr = studentExams.get(key);
-        curr.total += m.score;
-        curr.max += m.maxScore;
-      });
+        let passCount = 0;
+        let failCount = 0;
 
-      studentExams.forEach((val) => {
-        const percent = (val.total / val.max) * 100;
-        if (percent >= 40) passCount++;
-        else failCount++;
-      });
+        const studentExams = new Map();
+        marks.forEach(m => {
+          const key = `${m.studentId}-${m.examId}`;
+          if (!studentExams.has(key)) studentExams.set(key, { total: 0, max: 0 });
+          const curr = studentExams.get(key);
+          curr.total += m.score;
+          curr.max += m.maxScore;
+        });
 
-      passFailStats = [
-        { name: 'Pass', value: passCount, color: "var(--success)" },
-        { name: 'Fail', value: failCount, color: "var(--danger)" }
-      ];
+        studentExams.forEach((val) => {
+          const percent = (val.total / (val.max || 1)) * 100;
+          if (percent >= 40) passCount++;
+          else failCount++;
+        });
+
+        passFailStats = [
+          { name: 'Pass', value: passCount, color: "var(--success)" },
+          { name: 'Fail', value: failCount, color: "var(--danger)" }
+        ];
+      }
+    } catch (classFetchErr) {
+      console.error("Admin selected class data fetch error:", classFetchErr);
     }
   }
 
@@ -234,34 +251,47 @@ export default async function AdminDashboardPage({
   const isLeap = (y: number) => (y % 4 === 0 && y % 100 !== 0) || (y % 400 === 0);
   const isNonLeapFeb28 = !isLeap(schoolToday.year) && schoolToday.month === 2 && schoolToday.day === 28;
 
-  const [adminUser, birthdayStudentCount, birthdayTeacherCount, birthdayStaffCount] = await Promise.all([
-    prisma.user.findUnique({
-      where: { id: session.user.id },
-      select: { dateOfBirth: true, name: true },
-    }),
-    prisma.$queryRaw<Array<{ count: bigint }>>`
-      SELECT COUNT(*) as "count" FROM "Student" s
-      WHERE s."isActive" = true AND s."dateOfBirth" IS NOT NULL
-        AND ((EXTRACT(MONTH FROM s."dateOfBirth") = ${schoolToday.month} AND EXTRACT(DAY FROM s."dateOfBirth") = ${schoolToday.day})
-             ${isNonLeapFeb28 ? Prisma.sql`OR (EXTRACT(MONTH FROM s."dateOfBirth") = 2 AND EXTRACT(DAY FROM s."dateOfBirth") = 29)` : Prisma.empty});
-    `.catch(() => [{ count: BigInt(0) }]),
-    prisma.$queryRaw<Array<{ count: bigint }>>`
-      SELECT COUNT(*) as "count" FROM "Teacher" t
-      JOIN "User" u ON t."userId" = u."id"
-      WHERE t."isActive" = true AND u."status" = 'ACTIVE'
-        AND COALESCE(t."dateOfBirth", u."dateOfBirth") IS NOT NULL
-        AND ((EXTRACT(MONTH FROM COALESCE(t."dateOfBirth", u."dateOfBirth")) = ${schoolToday.month} AND EXTRACT(DAY FROM COALESCE(t."dateOfBirth", u."dateOfBirth")) = ${schoolToday.day})
-             ${isNonLeapFeb28 ? Prisma.sql`OR (EXTRACT(MONTH FROM COALESCE(t."dateOfBirth", u."dateOfBirth")) = 2 AND EXTRACT(DAY FROM COALESCE(t."dateOfBirth", u."dateOfBirth")) = 29)` : Prisma.empty});
-    `.catch(() => [{ count: BigInt(0) }]),
-    prisma.$queryRaw<Array<{ count: bigint }>>`
-      SELECT COUNT(*) as "count" FROM "Staff" st
-      JOIN "User" u ON st."userId" = u."id"
-      WHERE st."isActive" = true AND u."status" = 'ACTIVE'
-        AND COALESCE(st."dateOfBirth", u."dateOfBirth") IS NOT NULL
-        AND ((EXTRACT(MONTH FROM COALESCE(st."dateOfBirth", u."dateOfBirth")) = ${schoolToday.month} AND EXTRACT(DAY FROM COALESCE(st."dateOfBirth", u."dateOfBirth")) = ${schoolToday.day})
-             ${isNonLeapFeb28 ? Prisma.sql`OR (EXTRACT(MONTH FROM COALESCE(st."dateOfBirth", u."dateOfBirth")) = 2 AND EXTRACT(DAY FROM COALESCE(st."dateOfBirth", u."dateOfBirth")) = 29)` : Prisma.empty});
-    `.catch(() => [{ count: BigInt(0) }]),
-  ]);
+  let adminUser: { dateOfBirth: Date | null; name: string | null } | null = null;
+  let birthdayStudentCount: Array<{ count: bigint | number }> = [{ count: 0 }];
+  let birthdayTeacherCount: Array<{ count: bigint | number }> = [{ count: 0 }];
+  let birthdayStaffCount: Array<{ count: bigint | number }> = [{ count: 0 }];
+
+  try {
+    const birthdayResults = await Promise.all([
+      prisma.user.findUnique({
+        where: { id: session.user.id },
+        select: { dateOfBirth: true, name: true },
+      }).catch(() => null),
+      prisma.$queryRaw<Array<{ count: bigint }>>`
+        SELECT COUNT(*) as "count" FROM "Student" s
+        WHERE s."isActive" = true AND s."dateOfBirth" IS NOT NULL
+          AND ((EXTRACT(MONTH FROM s."dateOfBirth") = ${schoolToday.month} AND EXTRACT(DAY FROM s."dateOfBirth") = ${schoolToday.day})
+               ${isNonLeapFeb28 ? Prisma.sql`OR (EXTRACT(MONTH FROM s."dateOfBirth") = 2 AND EXTRACT(DAY FROM s."dateOfBirth") = 29)` : Prisma.empty});
+      `.catch(() => [{ count: BigInt(0) }]),
+      prisma.$queryRaw<Array<{ count: bigint }>>`
+        SELECT COUNT(*) as "count" FROM "Teacher" t
+        JOIN "User" u ON t."userId" = u."id"
+        WHERE t."isActive" = true AND u."status" = 'ACTIVE'
+          AND COALESCE(t."dateOfBirth", u."dateOfBirth") IS NOT NULL
+          AND ((EXTRACT(MONTH FROM COALESCE(t."dateOfBirth", u."dateOfBirth")) = ${schoolToday.month} AND EXTRACT(DAY FROM COALESCE(t."dateOfBirth", u."dateOfBirth")) = ${schoolToday.day})
+               ${isNonLeapFeb28 ? Prisma.sql`OR (EXTRACT(MONTH FROM COALESCE(t."dateOfBirth", u."dateOfBirth")) = 2 AND EXTRACT(DAY FROM COALESCE(t."dateOfBirth", u."dateOfBirth")) = 29)` : Prisma.empty});
+      `.catch(() => [{ count: BigInt(0) }]),
+      prisma.$queryRaw<Array<{ count: bigint }>>`
+        SELECT COUNT(*) as "count" FROM "Staff" st
+        JOIN "User" u ON st."userId" = u."id"
+        WHERE st."isActive" = true AND u."status" = 'ACTIVE'
+          AND COALESCE(st."dateOfBirth", u."dateOfBirth") IS NOT NULL
+          AND ((EXTRACT(MONTH FROM COALESCE(st."dateOfBirth", u."dateOfBirth")) = ${schoolToday.month} AND EXTRACT(DAY FROM COALESCE(st."dateOfBirth", u."dateOfBirth")) = ${schoolToday.day})
+               ${isNonLeapFeb28 ? Prisma.sql`OR (EXTRACT(MONTH FROM COALESCE(st."dateOfBirth", u."dateOfBirth")) = 2 AND EXTRACT(DAY FROM COALESCE(st."dateOfBirth", u."dateOfBirth")) = 29)` : Prisma.empty});
+      `.catch(() => [{ count: BigInt(0) }]),
+    ]);
+    adminUser = birthdayResults[0];
+    birthdayStudentCount = birthdayResults[1];
+    birthdayTeacherCount = birthdayResults[2];
+    birthdayStaffCount = birthdayResults[3];
+  } catch (bErr) {
+    console.error("Admin birthday check error:", bErr);
+  }
 
   let isAdminBirthday = false;
   if (adminUser?.dateOfBirth) {

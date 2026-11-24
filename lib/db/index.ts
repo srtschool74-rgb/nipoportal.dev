@@ -6,6 +6,23 @@ const globalForDb = globalThis as unknown as {
 };
 
 /**
+ * Sanitizes and optimizes database URLs for serverless environments (e.g. Vercel).
+ * Enforces a small connection limit (2) to prevent exhausting Supabase's session pooler limit (15).
+ */
+export function sanitizeConnectionUrl(rawUrl: string): string {
+  let url = rawUrl;
+  if (url.includes("connection_limit=")) {
+    url = url.replace(/connection_limit=\d+/, "connection_limit=2");
+  } else {
+    url += (url.includes("?") ? "&" : "?") + "connection_limit=2";
+  }
+  if (!url.includes("connect_timeout=")) {
+    url += "&connect_timeout=15";
+  }
+  return url;
+}
+
+/**
  * Lazily creates or returns the singleton Primary Prisma Client (Neon Singapore).
  * Never called at module evaluation time.
  */
@@ -14,15 +31,17 @@ export function getPrimaryClient(): PrismaClient {
     return globalForDb.primaryPrisma;
   }
 
-  const url =
+  const rawUrl =
     process.env.DATABASE_URL ||
     process.env.POSTGRES_PRISMA_URL ||
     process.env.POSTGRES_URL;
-  if (!url) {
+  if (!rawUrl) {
     throw new Error(
       "DATABASE_URL is not configured. Please define DATABASE_URL in your environment variables."
     );
   }
+
+  const url = sanitizeConnectionUrl(rawUrl);
 
   const client = new PrismaClient({
     datasources: {
@@ -47,14 +66,16 @@ export function getSecondaryClient(): PrismaClient | null {
     return globalForDb.secondaryPrisma;
   }
 
-  const supaUrl =
+  const rawSupaUrl =
     process.env.SECONDARY_DATABASE_URL ||
     process.env.SUPABASE_DATABASE_URL ||
     process.env.SUPABASE_DIRECT_URL;
 
-  if (!supaUrl) {
+  if (!rawSupaUrl) {
     return null;
   }
+
+  const supaUrl = sanitizeConnectionUrl(rawSupaUrl);
 
   const client = new PrismaClient({
     datasources: {
