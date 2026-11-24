@@ -14,7 +14,10 @@ export function getPrimaryClient(): PrismaClient {
     return globalForDb.primaryPrisma;
   }
 
-  const url = process.env.DATABASE_URL;
+  const url =
+    process.env.DATABASE_URL ||
+    process.env.POSTGRES_PRISMA_URL ||
+    process.env.POSTGRES_URL;
   if (!url) {
     throw new Error(
       "DATABASE_URL is not configured. Please define DATABASE_URL in your environment variables."
@@ -65,7 +68,11 @@ export function getSecondaryClient(): PrismaClient | null {
 }
 
 export function isPrimaryDbConfigured(): boolean {
-  return Boolean(process.env.DATABASE_URL);
+  return Boolean(
+    process.env.DATABASE_URL ||
+    process.env.POSTGRES_PRISMA_URL ||
+    process.env.POSTGRES_URL
+  );
 }
 
 export function isSecondaryDbConfigured(): boolean {

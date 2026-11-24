@@ -9,7 +9,7 @@ import { getAuthOptions } from "@/backend/auth/authOptions";
  */
 export const getCachedServerSession = cache(async () => {
   try {
-    if (!process.env.NEXTAUTH_SECRET) {
+    if (!process.env.NEXTAUTH_SECRET && !process.env.SUPABASE_JWT_SECRET) {
       return null;
     }
     return await getServerSession(getAuthOptions());

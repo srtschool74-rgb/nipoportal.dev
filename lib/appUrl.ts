@@ -4,7 +4,7 @@
  * Ensures metadata, canonical tags, sitemaps, and manifests always use the current deployment domain.
  */
 export function getAppUrl(): string {
-  const envUrl = process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL;
+  const envUrl = process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL;
   if (envUrl && typeof envUrl === "string" && envUrl.trim().length > 0) {
     return envUrl.trim().replace(/\/+$/, "");
   }
@@ -14,7 +14,6 @@ export function getAppUrl(): string {
     return vUrl.startsWith("http") ? vUrl : `https://${vUrl}`;
   }
 
-  // Default to current primary production host (AWS Amplify)
-  return "https://main.d3bt7u4517jg0f.amplifyapp.com";
+  return "https://nipoportal.vercel.app";
 }
 

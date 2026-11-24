@@ -352,7 +352,7 @@ export function getAuthOptions(): NextAuthOptions {
       },
     },
   },
-  secret: process.env.NEXTAUTH_SECRET,
+  secret: process.env.NEXTAUTH_SECRET || process.env.SUPABASE_JWT_SECRET,
   logger: {
     error(code, metadata) {
       if (code === "JWT_SESSION_ERROR") {
