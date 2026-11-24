@@ -37,7 +37,7 @@ async function checkStatus() {
     const t0 = performance.now();
     await Promise.race([
       neonClient.$queryRaw`SELECT 1 as ping`,
-      new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout after 3000ms')), 3000)),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout after 10000ms')), 10000)),
     ]);
     const neonMs = Math.round((performance.now() - t0) * 100) / 100;
     const count = await neonClient.user.count();
@@ -66,7 +66,7 @@ async function checkStatus() {
       const t1 = performance.now();
       await Promise.race([
         supaClient.$queryRaw`SELECT 1 as ping`,
-        new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout after 3000ms')), 3000)),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout after 10000ms')), 10000)),
       ]);
       const supaMs = Math.round((performance.now() - t1) * 100) / 100;
       const supaUsers = await supaClient.user.count();
