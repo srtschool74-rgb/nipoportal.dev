@@ -7,8 +7,15 @@ interface HomeProps {
 }
 
 export default async function Home(props: HomeProps) {
-  const searchParams = await props.searchParams;
-  const session = await getCachedServerSession();
+  let searchParams: { error?: string } = {};
+  try {
+    searchParams = (await props?.searchParams) || {};
+  } catch {}
+
+  let session: any = null;
+  try {
+    session = await getCachedServerSession();
+  } catch {}
 
   let schoolName = "SRT UNIVERSAL SCHOOL";
   let schoolLogo = "/logo/srt-logo.svg";

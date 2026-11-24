@@ -8,6 +8,14 @@ import { getAuthOptions } from "@/backend/auth/authOptions";
  * (e.g., Root Layout -> Dashboard Layout -> Child Page).
  */
 export const getCachedServerSession = cache(async () => {
-  return await getServerSession(getAuthOptions());
+  try {
+    if (!process.env.NEXTAUTH_SECRET) {
+      return null;
+    }
+    return await getServerSession(getAuthOptions());
+  } catch (err) {
+    console.warn("[SessionCache] Warning fetching session:", err);
+    return null;
+  }
 });
 

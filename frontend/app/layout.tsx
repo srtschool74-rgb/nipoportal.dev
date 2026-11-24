@@ -177,7 +177,13 @@ export default async function RootLayout({
   let initialTheme = defaultThemeMode === "system" ? "light" : defaultThemeMode; // fallback for server render
   let isAuthenticated = false;
 
-  const session = await getCachedServerSession();
+  let session: any = null;
+  try {
+    session = await getCachedServerSession();
+  } catch (err) {
+    console.warn("[RootLayout] getCachedServerSession note:", err);
+  }
+
   if (session?.user) {
     isAuthenticated = true;
     if (session.user.theme) {
