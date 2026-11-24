@@ -11,8 +11,9 @@ export const env = {
   get NEXTAUTH_SECRET() { return requireEnv('NEXTAUTH_SECRET'); },
   get NEXTAUTH_URL() { 
     if (process.env.NEXTAUTH_URL) return process.env.NEXTAUTH_URL;
+    if (process.env.VERCEL_PROJECT_PRODUCTION_URL) return `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`;
     if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
-    return requireEnv('NEXTAUTH_URL'); 
+    return "https://nipoportal.vercel.app"; 
   },
   get GOOGLE_CLIENT_ID() { return process.env.GOOGLE_CLIENT_ID || ""; },
   get GOOGLE_CLIENT_SECRET() { return process.env.GOOGLE_CLIENT_SECRET || ""; },

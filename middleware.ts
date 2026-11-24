@@ -47,6 +47,7 @@ function applySecurityHeaders(
 // -----------------------------------------------------------------------------
 const DEFAULT_ALLOWED_ORIGINS = [
   "https://main.d3bt7u4517jg0f.amplifyapp.com",
+  "https://nipoportal.vercel.app",
   "http://localhost:3000",
   "http://localhost:3001",
   "capacitor://localhost",
@@ -77,10 +78,10 @@ function isOriginAllowed(origin: string): boolean {
   const allowed = getAllowedOrigins();
   if (allowed.includes(origin)) return true;
 
-  // Allow subdomains of amplifyapp.com deployment if applicable
+  // Allow subdomains of amplifyapp.com and vercel.app deployments if applicable
   try {
     const parsed = new URL(origin);
-    if (parsed.hostname.endsWith(".amplifyapp.com")) {
+    if (parsed.hostname.endsWith(".amplifyapp.com") || parsed.hostname.endsWith(".vercel.app")) {
       return true;
     }
   } catch {}
