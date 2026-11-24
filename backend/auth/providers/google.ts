@@ -7,15 +7,26 @@ import { createUserSession } from "@/backend/lib/session-manager";
 import { recordUserLogin } from "@/backend/services/auth/loginActivityTracker";
 import { isSuperAdmin } from "@/backend/lib/auth/superAdmin";
 
-export const googleProviderConfig = GoogleProvider({
-  get clientId() { return env.GOOGLE_CLIENT_ID; },
-  get clientSecret() { return env.GOOGLE_CLIENT_SECRET; },
-  authorization: {
-    params: {
-      prompt: "select_account",
+export function getGoogleProvider() {
+  const clientId = (process.env.GOOGLE_CLIENT_ID || "").trim();
+  const clientSecret = (process.env.GOOGLE_CLIENT_SECRET || "").trim();
+
+  if (!clientId || !clientSecret) {
+    return null;
+  }
+
+  return GoogleProvider({
+    clientId,
+    clientSecret,
+    authorization: {
+      params: {
+        prompt: "select_account",
+      },
     },
-  },
-});
+  });
+}
+
+export const googleProviderConfig = getGoogleProvider();
 
 async function getClientMetadata() {
   let ipAddress = "Unknown";

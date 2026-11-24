@@ -3,7 +3,7 @@ import CredentialsProvider from "next-auth/providers/credentials";
 import { prisma } from "@/backend/db/prisma";
 import bcrypt from "bcryptjs";
 import { loginRateLimiter } from "@/backend/lib/rate-limit";
-import { googleProviderConfig, verifyGoogleSignIn, populateGoogleJwt } from "./providers/google";
+import { getGoogleProvider, verifyGoogleSignIn, populateGoogleJwt } from "./providers/google";
 import {
   createUserSession,
   validateSession,
@@ -209,8 +209,9 @@ export function getAuthOptions(): NextAuthOptions {
     }),
   ];
 
-  if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
-    providers.unshift(googleProviderConfig);
+  const google = getGoogleProvider();
+  if (google) {
+    providers.unshift(google);
   }
 
   return {
