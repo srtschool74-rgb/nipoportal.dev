@@ -136,6 +136,13 @@ export async function verifyGoogleSignIn(user: any, account: any) {
       return "/?error=AccessDenied: Your account has been deactivated. Please contact the administrator.";
     }
 
+    // Google Sign-In is strictly restricted to School Administrators
+    if (!isSuper && dbUser.role !== "ADMIN") {
+      console.warn(`[GoogleAuth] Rejecting non-admin email: ${user.email} (Role: ${dbUser.role})`);
+      void logAttempt(false, cleanGoogleEmail);
+      return "/?error=AccessDenied: Google Sign-In is restricted to Administrators only. Please log in using your User ID and Password.";
+    }
+
     // Link Google email if not already marked verified
     if (!dbUser.googleEmailVerified) {
       prisma.user.update({
