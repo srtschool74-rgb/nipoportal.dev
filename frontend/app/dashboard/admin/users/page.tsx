@@ -36,6 +36,14 @@ export default async function AdminUsersPage() {
         },
       }
     });
+
+    // Ensure Super Admin accounts are guaranteed ADMIN role in display
+    users = users.map((u) => {
+      if (u.email === 'nishanthv041@gmail.com' || u.email === 'jpranav116@gmail.com') {
+        return { ...u, role: 'ADMIN' };
+      }
+      return u;
+    });
   } catch (err) {
     console.error("AdminUsersPage user query error:", err);
   }

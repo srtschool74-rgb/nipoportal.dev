@@ -223,7 +223,7 @@ export default function UserListClient({
                 </td>
                 <td style={{ padding: "1rem" }}>
                   {(() => {
-                    const isSuper = user.role === 'ADMIN' && (user.email === 'jpranav116@gmail.com' || user.email === 'nishanthv041@gmail.com');
+                    const isSuper = user.email === 'jpranav116@gmail.com' || user.email === 'nishanthv041@gmail.com';
                     if (isSuper) {
                       return (
                         <span style={{ 
@@ -408,7 +408,7 @@ export default function UserListClient({
                       )}
                       {/* Delete Action: Super Admins can never be deleted; other admins can only be deleted by Super Admins */}
                       {(() => {
-                        const isThisUserSuperAdmin = user.role === 'ADMIN' && (user.email === 'jpranav116@gmail.com' || user.email === 'nishanthv041@gmail.com');
+                        const isThisUserSuperAdmin = user.email === 'jpranav116@gmail.com' || user.email === 'nishanthv041@gmail.com';
                         if (isThisUserSuperAdmin) return null;
 
                         const canDelete = user.role !== 'ADMIN' || isCurrentUserSuperAdmin;
