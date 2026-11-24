@@ -10,30 +10,35 @@ export default async function AdminUsersPage() {
 
   const isCurrentUserSuperAdmin = isSuperAdmin(session.user.email);
 
-  const users = await prisma.user.findMany({
-    orderBy: { createdAt: 'desc' },
-    select: {
-      id: true,
-      name: true,
-      email: true,
-      role: true,
-      dateOfBirth: true,
-      status: true,
-      expiresAt: true,
-      createdAt: true,
-      teacher: {
-        select: { id: true, phone: true }
-      },
-      parent: {
-        select: { id: true, phone: true }
-      },
-      sessions: {
-        where: { revokedAt: null, expiresAt: { gt: new Date() } },
-        select: { id: true, deviceInfo: true, ipAddress: true, lastActiveAt: true, createdAt: true },
-        orderBy: { lastActiveAt: "desc" },
-      },
-    }
-  });
+  let users: any[] = [];
+  try {
+    users = await prisma.user.findMany({
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        dateOfBirth: true,
+        status: true,
+        expiresAt: true,
+        createdAt: true,
+        teacher: {
+          select: { id: true, phone: true }
+        },
+        parent: {
+          select: { id: true, phone: true }
+        },
+        sessions: {
+          where: { revokedAt: null, expiresAt: { gt: new Date() } },
+          select: { id: true, deviceInfo: true, ipAddress: true, lastActiveAt: true, createdAt: true },
+          orderBy: { lastActiveAt: "desc" },
+        },
+      }
+    });
+  } catch (err) {
+    console.error("AdminUsersPage user query error:", err);
+  }
 
   return (
     <div className={styles.dashboard}>
