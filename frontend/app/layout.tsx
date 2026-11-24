@@ -253,6 +253,7 @@ export default async function RootLayout({
               OneSignalDeferred.push(async function(OneSignal) {
                 await OneSignal.init({
                   appId: "${process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID || "63a34381-365f-40d4-b3ed-244c408f7243"}",
+                  safari_web_id: "web.onesignal.auto.2e21fe47-8329-4413-bae9-ecef4da3342d",
                 });
               });
             `,
