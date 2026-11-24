@@ -245,8 +245,9 @@ export default function ModernLoginForm({
         await new Promise((resolve) => setTimeout(resolve, 280));
         window.location.href = target;
       }
-    } catch {
-      setError("An unexpected connection error occurred. Please try again.");
+    } catch (err: any) {
+      console.error("[Login Error]", err);
+      setError(err?.message && !err.message.includes("fetch") ? err.message : "An unexpected connection error occurred. Please try again.");
       setLoading(false);
       setIsMorphing(false);
     }

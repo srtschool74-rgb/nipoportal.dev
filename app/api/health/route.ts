@@ -12,8 +12,10 @@ export async function GET() {
   const missingEnv: string[] = [];
 
   // Core essential production variables
-  if (!process.env.DATABASE_URL) missingEnv.push('DATABASE_URL');
-  if (!process.env.NEXTAUTH_SECRET) missingEnv.push('NEXTAUTH_SECRET');
+  const dbUrl = process.env.DATABASE_URL || process.env.POSTGRES_PRISMA_URL || process.env.POSTGRES_URL;
+  if (!dbUrl) missingEnv.push('DATABASE_URL');
+  const secret = process.env.NEXTAUTH_SECRET || process.env.SUPABASE_JWT_SECRET;
+  if (!secret) missingEnv.push('NEXTAUTH_SECRET');
 
   if (missingEnv.length > 0) {
     return NextResponse.json({
