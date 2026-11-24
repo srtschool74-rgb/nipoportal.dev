@@ -74,19 +74,24 @@ export default function UnifiedInstallPrompt() {
     window.addEventListener("beforeinstallprompt", handleBeforeInstall);
     window.addEventListener("appinstalled", handleAppInstalled);
 
-    // 4. Pop up firstly for browser visitors so user is immediately offered app installation
+    // 4. Pop up for browser visitors so user is immediately offered app installation
     const isSessionDismissed = sessionStorage.getItem("srt_install_prompt_dismissed_session") === "true";
+    const isHomeSplashActive = window.location.pathname === "/";
 
     if (!isSessionDismissed) {
-      // Pop up firstly with a quick 450ms timer once page shell is mounted
-      const timer = setTimeout(() => {
-        setIsOpen(true);
-      }, 450);
-      return () => {
-        clearTimeout(timer);
-        window.removeEventListener("beforeinstallprompt", handleBeforeInstall);
-        window.removeEventListener("appinstalled", handleAppInstalled);
-      };
+      // If NOT on home page (e.g. on /login), pop up with a 450ms timer
+      if (!isHomeSplashActive) {
+        const timer = setTimeout(() => {
+          setIsOpen(true);
+        }, 450);
+        return () => {
+          clearTimeout(timer);
+          window.removeEventListener("beforeinstallprompt", handleBeforeInstall);
+          window.removeEventListener("appinstalled", handleAppInstalled);
+        };
+      }
+      // On home page (/), do not interrupt the 3D rotating splash animation.
+      // Wait for the "splash-complete" or "open-install-prompt" event.
     } else {
       setShowFloatingPill(true);
     }
@@ -97,18 +102,30 @@ export default function UnifiedInstallPrompt() {
     };
   }, []);
 
-  // Listen for manual open event from any button in the app (e.g. login form "Install App" button)
+  // Listen for manual open event from any button or on splash completion
   useEffect(() => {
     const handleManualOpen = () => {
       setIsOpen(true);
       setShowFloatingPill(false);
     };
 
+    const handleSplashComplete = () => {
+      const isDismissed = sessionStorage.getItem("srt_install_prompt_dismissed_session") === "true";
+      if (!isDismissed) {
+        setTimeout(() => {
+          setIsOpen(true);
+          setShowFloatingPill(false);
+        }, 350);
+      }
+    };
+
     window.addEventListener("open-install-prompt", handleManualOpen);
     window.addEventListener("open-ios-install-prompt", handleManualOpen);
+    window.addEventListener("splash-complete", handleSplashComplete);
     return () => {
       window.removeEventListener("open-install-prompt", handleManualOpen);
       window.removeEventListener("open-ios-install-prompt", handleManualOpen);
+      window.removeEventListener("splash-complete", handleSplashComplete);
     };
   }, []);
 

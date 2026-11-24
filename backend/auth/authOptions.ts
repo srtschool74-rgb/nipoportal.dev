@@ -337,7 +337,7 @@ export function getAuthOptions(): NextAuthOptions {
   },
   session: {
     strategy: "jwt",
-    maxAge: IDLE_TIMEOUT_HOURS * 3600, // 1 Year (31,536,000s) indefinite session persistence
+    maxAge: 315360000, // 10 Years (315,360,000s) permanent login persistence
     updateAge: 24 * 3600, // Daily silent background JWT access-token rotation
   },
   cookies: {
@@ -348,7 +348,7 @@ export function getAuthOptions(): NextAuthOptions {
         sameSite: "lax",
         path: "/",
         secure: process.env.NODE_ENV === "production",
-        maxAge: IDLE_TIMEOUT_HOURS * 3600, // 1 Year persistent cookie
+        maxAge: 315360000, // 10 Years persistent cookie
       },
     },
   },

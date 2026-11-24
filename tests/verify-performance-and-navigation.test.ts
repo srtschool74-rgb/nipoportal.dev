@@ -137,6 +137,57 @@ function runPerformanceVerification() {
     const homeContent = fs.readFileSync(homeClientPath, "utf8");
     assert("HomeClient renders 3D cinematic SplashScreen component", homeContent.includes("<SplashScreen"));
     assert("HomeClient renders ModernLoginForm for unauthenticated users", homeContent.includes("<ModernLoginForm"));
+    assert("HomeClient prefetches target dashboard at 0ms during splash animation", homeContent.includes("router.prefetch(target)"));
+  }
+
+  // 9. Aggressive Prefetching & Permanent Login Engine
+  console.log("\n--- Check 9: Aggressive Prefetching & Permanent Login Engine ---");
+  const warmupPath = path.join(process.cwd(), "app/api/warmup/route.ts");
+  assert("app/api/warmup/route.ts exists", fs.existsSync(warmupPath));
+  if (fs.existsSync(warmupPath)) {
+    const warmupContent = fs.readFileSync(warmupPath, "utf8");
+    assert("Warmup endpoint primes Prisma DB pooler", warmupContent.includes("prisma.$queryRaw`SELECT 1`"));
+  }
+
+  const prefetcherPath = path.join(process.cwd(), "frontend/components/GlobalPrefetcher.tsx");
+  assert("GlobalPrefetcher.tsx exists", fs.existsSync(prefetcherPath));
+  if (fs.existsSync(prefetcherPath)) {
+    const pfContent = fs.readFileSync(prefetcherPath, "utf8");
+    assert("GlobalPrefetcher calls /api/warmup", pfContent.includes("/api/warmup"));
+    assert("GlobalPrefetcher prefetches core dashboards during idle", pfContent.includes("/dashboard/teacher") && pfContent.includes("/dashboard/parent"));
+    assert("GlobalPrefetcher implements anticipatory touch/pointer prefetching", pfContent.includes("pointerover") && pfContent.includes("touchstart"));
+  }
+
+  const layoutPath = path.join(process.cwd(), "frontend/app/layout.tsx");
+  if (fs.existsSync(layoutPath)) {
+    const layoutContent = fs.readFileSync(layoutPath, "utf8");
+    assert("layout.tsx mounts GlobalPrefetcher", layoutContent.includes("<GlobalPrefetcher"));
+  }
+
+  const sessionConfigPath = path.join(process.cwd(), "backend/lib/session-config.ts");
+  if (fs.existsSync(sessionConfigPath)) {
+    const scContent = fs.readFileSync(sessionConfigPath, "utf8");
+    assert("session-config.ts sets IDLE_TIMEOUT_HOURS to 10 years (87,600h)", scContent.includes("87600"));
+    assert("session-config.ts disables MAX_SESSION_HOURS for permanent login", scContent.includes("MAX_SESSION_HOURS: number | null = null"));
+  }
+
+  const authOptionsPath = path.join(process.cwd(), "backend/auth/authOptions.ts");
+  if (fs.existsSync(authOptionsPath)) {
+    const aoContent = fs.readFileSync(authOptionsPath, "utf8");
+    assert("authOptions.ts sets 10-year session maxAge (315,360,000s)", aoContent.includes("315360000"));
+  }
+
+  const installPromptPath = path.join(process.cwd(), "frontend/components/pwa/UnifiedInstallPrompt.tsx");
+  if (fs.existsSync(installPromptPath)) {
+    const ipContent = fs.readFileSync(installPromptPath, "utf8");
+    assert("UnifiedInstallPrompt waits for splash-complete on home page", ipContent.includes("splash-complete") && ipContent.includes("isHomeSplashActive"));
+  }
+
+  const loginFormPath = path.join(process.cwd(), "frontend/components/ModernLoginForm.tsx");
+  if (fs.existsSync(loginFormPath)) {
+    const lfContent = fs.readFileSync(loginFormPath, "utf8");
+    assert("ModernLoginForm pre-fetches dashboard routes", lfContent.includes("router.prefetch(\"/dashboard/teacher\")"));
+    assert("ModernLoginForm prompts system notification on submit if default", lfContent.includes("Notification.requestPermission()"));
   }
 
   console.log("\n================================================================================");

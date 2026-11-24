@@ -7,12 +7,12 @@
 
 export const SINGLE_DEVICE_ROLES: readonly string[] = ["PARENT", "TEACHER"];
 
-// 1 Year (8,760 hours) idle persistence for seamless PWA mobile app sessions
-export const IDLE_TIMEOUT_HOURS = 8760;
-export const INACTIVITY_LOGOUT_HOURS = 6;
+// 10 Years (87,600 hours) indefinite idle persistence for permanent seamless logins
+export const IDLE_TIMEOUT_HOURS = 87600;
+export const INACTIVITY_LOGOUT_HOURS = 87600;
 
-// 7-day maximum session duration (168 hours)
-export const MAX_SESSION_HOURS: number | null = 168;
+// Permanent session duration: null disables automatic session termination
+export const MAX_SESSION_HOURS: number | null = null;
 
 export const ACTIVITY_UPDATE_INTERVAL_MIN = 15;
 

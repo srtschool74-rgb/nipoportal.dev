@@ -164,14 +164,14 @@ export async function validateSession(sessionId: string): Promise<ValidateSessio
     const lastActiveTime = new Date(session.lastActiveAt).getTime();
     const idleLimitMs = IDLE_TIMEOUT_HOURS * 3600 * 1000;
 
-    // Check idle timeout
-    if (now - lastActiveTime > idleLimitMs) {
+    // Check idle timeout only if an explicit limit is configured below 10 years
+    if (IDLE_TIMEOUT_HOURS && IDLE_TIMEOUT_HOURS < 87600 && (now - lastActiveTime > idleLimitMs)) {
       sessionValidationCache.delete(sessionId);
       await revokeSession(sessionId, "IDLE_TIMEOUT");
       return { valid: false, reason: "IDLE_TIMEOUT" as SessionRevocationReason };
     }
 
-    // Check max session hours if configured
+    // Check max session hours if explicitly configured
     if (MAX_SESSION_HOURS && MAX_SESSION_HOURS > 0) {
       const createdTime = new Date(session.createdAt).getTime();
       const maxLimitMs = MAX_SESSION_HOURS * 3600 * 1000;
@@ -182,8 +182,8 @@ export async function validateSession(sessionId: string): Promise<ValidateSessio
       }
     }
 
-    // Check expiresAt
-    if (now > new Date(session.expiresAt).getTime()) {
+    // Check expiresAt if explicitly expired
+    if (session.expiresAt && now > new Date(session.expiresAt).getTime()) {
       sessionValidationCache.delete(sessionId);
       await revokeSession(sessionId, "IDLE_TIMEOUT");
       return { valid: false, reason: "IDLE_TIMEOUT" as SessionRevocationReason };

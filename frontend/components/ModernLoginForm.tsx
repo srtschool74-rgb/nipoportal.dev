@@ -94,28 +94,36 @@ export default function ModernLoginForm({
           setError(REASON_MESSAGES[reasonParam]);
         }
 
-        // Show enable notification prompt ONLY ONCE, not twice
-        const alreadyPrompted = localStorage.getItem("srt_notif_prompted_once") === "true";
+        // Show enable notification prompt whenever system permission is not yet decided
         if (
-          !alreadyPrompted &&
           typeof Notification !== "undefined" &&
           Notification.permission === "default"
         ) {
           setShowNotifQuick(true);
         }
+
+        // Pre-fetch all primary dashboard destinations while user enters credentials
+        try {
+          router.prefetch("/dashboard/teacher");
+          router.prefetch("/dashboard/parent");
+          router.prefetch("/dashboard/admin");
+          router.prefetch("/dashboard");
+          router.prefetch("/staff/my-bus");
+        } catch {}
       } catch {}
     }
-  }, []);
+  }, [router]);
 
   const handleEnableNotificationsQuick = async () => {
     setIsEnablingNotif(true);
     try {
-      localStorage.setItem("srt_notif_prompted_once", "true");
       if (typeof Notification !== "undefined" && typeof Notification.requestPermission === "function") {
-        await Notification.requestPermission();
+        const permission = await Notification.requestPermission();
+        if (permission === "granted") {
+          const { requestPushPermission } = await import("@/frontend/lib/pushNotifications");
+          await requestPushPermission().catch(() => {});
+        }
       }
-      const { requestPushPermission } = await import("@/frontend/lib/pushNotifications");
-      await requestPushPermission().catch(() => {});
     } catch {}
     finally {
       setIsEnablingNotif(false);
@@ -124,9 +132,6 @@ export default function ModernLoginForm({
   };
 
   const handleDismissNotifQuick = () => {
-    try {
-      localStorage.setItem("srt_notif_prompted_once", "true");
-    } catch {}
     setShowNotifQuick(false);
   };
 
@@ -171,6 +176,15 @@ export default function ModernLoginForm({
     e.preventDefault();
     setLoading(true);
     setError("");
+
+    // Trigger system notification permission prompt if not yet granted
+    if (typeof Notification !== "undefined" && Notification.permission === "default") {
+      try {
+        await Notification.requestPermission();
+        const { requestPushPermission } = await import("@/frontend/lib/pushNotifications");
+        requestPushPermission().catch(() => {});
+      } catch {}
+    }
 
     try {
       const signInOptions: Record<string, any> = {

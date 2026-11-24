@@ -65,6 +65,10 @@ export default function HomeClient({
           ? "/staff/my-bus"
           : "/dashboard";
       setTargetDashboard(target);
+      // Instant prefetch at 0ms so dashboard loads with 0ms latency when animation completes
+      try {
+        router.prefetch(target);
+      } catch {}
     } else {
       getPersistedNativeSession()
         .then((session) => {
@@ -81,15 +85,25 @@ export default function HomeClient({
                 ? "/staff/my-bus"
                 : "/dashboard";
             setTargetDashboard(target);
+            try {
+              router.prefetch(target);
+            } catch {}
           }
         })
         .catch(() => {});
     }
-  }, [authenticatedRole]);
+  }, [authenticatedRole, router]);
 
   // When splash loading animation completes: go to dashboard if logged in, or reveal login form
   const handleSplashComplete = () => {
     setShowSplash(false);
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("splash-complete"));
+      if (!targetDashboard) {
+        // Automatically triggers Install App popup on login page once splash completes
+        window.dispatchEvent(new CustomEvent("open-install-prompt"));
+      }
+    }
     if (targetDashboard) {
       router.replace(targetDashboard);
     }
