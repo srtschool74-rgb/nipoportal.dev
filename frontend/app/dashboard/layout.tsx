@@ -46,7 +46,7 @@ export default async function DashboardLayout({
   // Preload system settings and active unread notifications in parallel during layout SSR
   // This enables NotificationPopupModal to render instantly without client fetch delay
   const [settings, initialNotifications] = await Promise.all([
-    getSystemSettings(),
+    getSystemSettings().catch(() => ({} as Record<string, string>)),
     getUnifiedNotificationsAction({ unreadOnly: true }).catch(() => []),
   ]);
 
