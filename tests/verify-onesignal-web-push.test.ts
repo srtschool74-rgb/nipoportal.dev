@@ -19,7 +19,7 @@ function runOneSignalVerification() {
     }
   }
 
-  const EXPECTED_APP_ID = "721f0fa5-683c-4edc-93ce-35a8786d655b";
+  const EXPECTED_APP_ID = "63a34381-365f-40d4-b3ed-244c408f7243";
 
   // 1. Verify OneSignal Service Worker in public/
   const workerPath = path.join(process.cwd(), "public/OneSignalSDKWorker.js");

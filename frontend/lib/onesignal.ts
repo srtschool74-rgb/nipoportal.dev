@@ -4,7 +4,7 @@ import OneSignal from "react-onesignal";
 
 export const ONESIGNAL_APP_ID =
   process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID ||
-  "721f0fa5-683c-4edc-93ce-35a8786d655b";
+  "63a34381-365f-40d4-b3ed-244c408f7243";
 
 let isInitialized = false;
 let initPromise: Promise<void> | null = null;
