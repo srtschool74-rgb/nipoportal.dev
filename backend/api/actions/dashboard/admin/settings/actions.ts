@@ -143,14 +143,19 @@ const DEFAULT_SYSTEM_SETTINGS: Record<string, string> = {
 export const getSystemSettings = unstable_cache(
   async (): Promise<Record<string, string>> => {
     try {
+      if (!process.env.DATABASE_URL) {
+        return DEFAULT_SYSTEM_SETTINGS;
+      }
       const settings = await prisma.systemSetting.findMany({
         select: { key: true, value: true }
       });
       const settingsMap: Record<string, string> = { ...DEFAULT_SYSTEM_SETTINGS };
       settings.forEach(s => { settingsMap[s.key] = s.value; });
       return settingsMap;
-    } catch (e) {
-      console.error("Failed to load system settings:", e);
+    } catch (e: any) {
+      if (process.env.NODE_ENV === "development") {
+        console.warn("Failed to load system settings:", e?.message);
+      }
       return DEFAULT_SYSTEM_SETTINGS;
     }
   },
@@ -166,6 +171,18 @@ export async function getSystemSetting(key: string, defaultValue: string = "") {
 export const getSchoolInfo = unstable_cache(
   async (includeLogo: boolean = false): Promise<Record<string, string>> => {
     try {
+      if (!process.env.DATABASE_URL) {
+        return {
+          SCHOOL_NAME: DEFAULT_SYSTEM_SETTINGS.SCHOOL_NAME,
+          SCHOOL_ADDRESS: DEFAULT_SYSTEM_SETTINGS.SCHOOL_ADDRESS,
+          SCHOOL_CONTACT: DEFAULT_SYSTEM_SETTINGS.SCHOOL_CONTACT,
+          SCHOOL_EMAIL: DEFAULT_SYSTEM_SETTINGS.SCHOOL_EMAIL,
+          SCHOOL_WEBSITE: DEFAULT_SYSTEM_SETTINGS.SCHOOL_WEBSITE,
+          PRINCIPAL_NAME: DEFAULT_SYSTEM_SETTINGS.PRINCIPAL_NAME,
+          ACADEMIC_YEAR: DEFAULT_SYSTEM_SETTINGS.ACADEMIC_YEAR,
+          SCHOOL_LOGO: ""
+        };
+      }
       const settings = await prisma.systemSetting.findMany({
         where: {
           category: "SCHOOL",
@@ -185,8 +202,10 @@ export const getSchoolInfo = unstable_cache(
       };
       settings.forEach(s => { map[s.key] = s.value; });
       return map;
-    } catch (e) {
-      console.error("Failed to load school info:", e);
+    } catch (e: any) {
+      if (process.env.NODE_ENV === "development") {
+        console.warn("Failed to load school info:", e?.message);
+      }
       return DEFAULT_SYSTEM_SETTINGS;
     }
   },
@@ -196,6 +215,7 @@ export const getSchoolInfo = unstable_cache(
 
 export async function getSchoolLogo(): Promise<string> {
   try {
+    if (!process.env.DATABASE_URL) return "";
     const setting = await prisma.systemSetting.findUnique({
       where: { key: "SCHOOL_LOGO" },
       select: { value: true }

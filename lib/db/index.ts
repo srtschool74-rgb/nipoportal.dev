@@ -64,6 +64,10 @@ export function getSecondaryClient(): PrismaClient | null {
   return client;
 }
 
+export function isPrimaryDbConfigured(): boolean {
+  return Boolean(process.env.DATABASE_URL);
+}
+
 export function isSecondaryDbConfigured(): boolean {
   return Boolean(
     process.env.SECONDARY_DATABASE_URL ||
