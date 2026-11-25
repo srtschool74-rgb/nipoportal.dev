@@ -108,15 +108,22 @@ export async function verifyGoogleSignIn(user: any, account: any) {
 
     let dbUser;
     try {
-      // Step 1: Ultra-fast indexed exact match on primary email
-      dbUser = await prisma.user.findUnique({
-        where: { email: cleanGoogleEmail },
+      // Step 1: Exact match on primary email (case-insensitive)
+      dbUser = await prisma.user.findFirst({
+        where: { email: { equals: cleanGoogleEmail, mode: "insensitive" } },
       });
 
-      // Step 2: Fallback to indexed googleEmail if primary email differs
+      // Step 2: Match on registered googleEmail
       if (!dbUser) {
         dbUser = await prisma.user.findFirst({
-          where: { googleEmail: cleanGoogleEmail },
+          where: { googleEmail: { equals: cleanGoogleEmail, mode: "insensitive" } },
+        });
+      }
+
+      // Step 3: Match on alternateEmail
+      if (!dbUser) {
+        dbUser = await prisma.user.findFirst({
+          where: { alternateEmail: { equals: cleanGoogleEmail, mode: "insensitive" } },
         });
       }
     } catch (error) {
@@ -128,7 +135,7 @@ export async function verifyGoogleSignIn(user: any, account: any) {
     if (!dbUser) {
       console.warn(`[GoogleAuth] Rejecting unregistered Google email: ${user.email}`);
       void logAttempt(false, cleanGoogleEmail);
-      return "/?error=AccessDenied: Your Google account email is not registered. Please contact your administrator.";
+      return "/?error=AccessDenied: Your Google account email is not registered. Please contact your school administrator to register your email.";
     }
 
     if (dbUser.status === "INACTIVE") {
@@ -136,15 +143,8 @@ export async function verifyGoogleSignIn(user: any, account: any) {
       return "/?error=AccessDenied: Your account has been deactivated. Please contact the administrator.";
     }
 
-    // Google Sign-In is strictly restricted to School Administrators
-    if (!isSuper && dbUser.role !== "ADMIN") {
-      console.warn(`[GoogleAuth] Rejecting non-admin email: ${user.email} (Role: ${dbUser.role})`);
-      void logAttempt(false, cleanGoogleEmail);
-      return "/?error=AccessDenied: Google Sign-In is restricted to Administrators only. Please log in using your User ID and Password.";
-    }
-
     // Link Google email if not already marked verified
-    if (!dbUser.googleEmailVerified) {
+    if (!dbUser.googleEmailVerified || dbUser.googleEmail !== cleanGoogleEmail) {
       prisma.user.update({
         where: { id: dbUser.id },
         data: {
@@ -187,7 +187,7 @@ export async function populateGoogleJwt(token: any, user: any, account: any) {
 
       if (!dbUser) {
         dbUser = await prisma.user.findFirst({
-          where: { googleEmail: cleanGoogleEmail },
+          where: { googleEmail: { equals: cleanGoogleEmail, mode: "insensitive" } },
           select: {
             id: true,
             email: true,
@@ -200,15 +200,52 @@ export async function populateGoogleJwt(token: any, user: any, account: any) {
         });
       }
 
-      const activeRole = isSuper ? "ADMIN" : (dbUser?.role || "ADMIN");
+      if (!dbUser) {
+        dbUser = await prisma.user.findFirst({
+          where: { alternateEmail: { equals: cleanGoogleEmail, mode: "insensitive" } },
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            role: true,
+            theme: true,
+            notificationsEnabled: true,
+            sessionVersion: true,
+          },
+        });
+      }
+
+      const activeRole = isSuper ? "ADMIN" : (dbUser?.role || "PARENT");
       const userId = dbUser?.id || `usr_${cleanGoogleEmail.replace(/[^a-zA-Z0-9]/g, "")}`;
       const displayName = (dbUser?.name ? dbUser.name.trim() : user.name) || (isSuper ? "Super Admin" : "User");
+
+      // Compute available roles for role switcher
+      const availableRoles: string[] = [activeRole];
+      if (dbUser?.id) {
+        try {
+          const userWithRoles = await prisma.user.findUnique({
+            where: { id: dbUser.id },
+            select: {
+              role: true,
+              teacher: { select: { id: true, isActive: true } },
+              parent: { select: { id: true, isActive: true } },
+              staff: { select: { id: true, isActive: true } },
+            },
+          });
+          if (userWithRoles) {
+            if (userWithRoles.teacher?.isActive && !availableRoles.includes("TEACHER")) availableRoles.push("TEACHER");
+            if (userWithRoles.parent?.isActive && !availableRoles.includes("PARENT")) availableRoles.push("PARENT");
+            if (userWithRoles.staff?.isActive && !availableRoles.includes("STAFF")) availableRoles.push("STAFF");
+            if (userWithRoles.role === "ADMIN" && !availableRoles.includes("ADMIN")) availableRoles.push("ADMIN");
+          }
+        } catch {}
+      }
 
       token.id = userId;
       token.email = cleanGoogleEmail;
       token.name = displayName;
       token.role = activeRole;
-      token.availableRoles = [activeRole];
+      token.availableRoles = availableRoles;
       token.theme = dbUser?.theme || "light";
       token.notificationsEnabled = dbUser?.notificationsEnabled ?? true;
       token.sessionVersion = dbUser?.sessionVersion || 1;

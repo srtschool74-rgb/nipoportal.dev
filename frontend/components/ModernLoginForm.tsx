@@ -258,8 +258,8 @@ export default function ModernLoginForm({
     setError("");
 
     try {
-      // Option A: Direct one-click login for Super Admin / Admin accounts
-      const target = "/dashboard/admin";
+      // Direct one-click login for all registered accounts (Admin, Teacher, Parent, Staff, Student)
+      const target = "/dashboard";
       const res = await signIn("google", { callbackUrl: target, redirect: false });
 
       if (res?.error) {
@@ -500,7 +500,7 @@ export default function ModernLoginForm({
                               fill="#EA4335"
                             />
                           </svg>
-                          <span>Log in with Google (Admin)</span>
+                          <span>Log in with Google</span>
                         </>
                       )}
                     </button>
