@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Users, GraduationCap, BookOpen, Briefcase, UserCheck, ShieldCheck } from "lucide-react";
+import { Users, GraduationCap, BookOpen, Briefcase, UserCheck } from "lucide-react";
 import type { AdminDashboardSummary } from "@/shared/types/stats";
 import { useStatsLiveRefresh } from "@/frontend/hooks/useStatsLiveRefresh";
 import DashboardSectionSkeleton from "@/frontend/components/ui/DashboardSectionSkeleton";
@@ -117,18 +117,6 @@ export default function AdminDashboardStatsGrid({
           <div className={styles.statInfo}>
             <span className={styles.statLabel}>Staff Attendance</span>
             <span className={styles.statValue}>Manage</span>
-          </div>
-        </div>
-      </Link>
-
-      <Link href="/dashboard/admin/data-check" prefetch={false} style={{ textDecoration: "none", color: "inherit" }}>
-        <div className={styles.statCard}>
-          <div className={styles.statIcon} style={{ backgroundColor: "rgba(16, 185, 129, 0.1)", color: "#10b981" }}>
-            <ShieldCheck size={24} />
-          </div>
-          <div className={styles.statInfo}>
-            <span className={styles.statLabel}>Data Integrity</span>
-            <span className={styles.statValue}>Check</span>
           </div>
         </div>
       </Link>
