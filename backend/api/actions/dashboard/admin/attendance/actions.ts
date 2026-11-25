@@ -6,6 +6,7 @@ import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
 import { getSessionDateTime, isForenoonRecord, isAfternoonRecord } from "@/backend/lib/services/attendanceCalculation";
 import { sendInstantPortalNotification } from "@/lib/pushDispatcher";
+import { invalidateAllStatsCaches } from "@/backend/services/stats";
 
 function formatRemarksWithSession(remarks: string | undefined | null, session: "FORENOON" | "AFTERNOON"): string {
   const cleanRemarks = (remarks || "").replace(/\s*\((FORENOON|AFTERNOON)\)/gi, "").trim();
@@ -98,6 +99,7 @@ export async function adminUpdateAttendance(
     revalidatePath("/dashboard/admin/attendance");
     revalidatePath("/dashboard/teacher/attendance");
     revalidatePath("/dashboard/parent/attendance");
+    await invalidateAllStatsCaches();
     return { success: true };
   } catch (error: unknown) {
     if (error instanceof Error) {
@@ -199,6 +201,7 @@ export async function adminBulkAttendance(data: {
     revalidatePath("/dashboard/admin/attendance");
     revalidatePath("/dashboard/teacher/attendance");
     revalidatePath("/dashboard/parent/attendance");
+    await invalidateAllStatsCaches();
     return { success: true };
   } catch (error: unknown) {
     if (error instanceof Error) {

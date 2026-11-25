@@ -9,7 +9,8 @@ import nextDynamic from "next/dynamic";
 import ParentChildBanner from "./ParentChildBanner";
 import Link from "next/link";
 import { getSchoolCalendarStats } from "@/backend/api/actions/dashboard/attendance/calendarStats";
-import { isForenoonRecord, calculateAttendancePercentage } from "@/backend/lib/services/attendanceCalculation";
+import { isForenoonRecord } from "@/backend/lib/services/attendanceCalculation";
+import { getStudentAttendanceSummary } from "@/backend/services/stats";
 import { getEffectiveTimetable } from "@/backend/lib/timetable/getEffectiveTimetable";
 import { getSchoolNow, startOfSchoolDay } from "@/lib/time";
 import ParentDashboardTimetableCard from "./ParentDashboardTimetableCard";
@@ -82,12 +83,13 @@ export default async function ParentDashboard({
   const todayDayName = schoolToday.weekday;
   const todayDate = startOfSchoolDay();
 
-  // 1. Fetch attendance, latest exam, calendar statistics, today's schedule, and weekly timetable slots concurrently
-  const [attendanceRecords, lastExamWithMarks, calendarStats, effectiveScheduleSlots, weeklyTimetableSlots] = await Promise.all([
+  // 1. Fetch attendance summary (full academic range), recent entries, latest exam, schedule, and timetable concurrently
+  const [attSummary, attendanceRecords, lastExamWithMarks, calendarStats, effectiveScheduleSlots, weeklyTimetableSlots] = await Promise.all([
+    getStudentAttendanceSummary(selectedChild.id, { classId: selectedChild.classId }),
     prisma.attendance.findMany({
       where: { studentId: selectedChild.id },
       orderBy: { date: 'desc' },
-      take: 60,
+      take: 10,
       select: { id: true, status: true, date: true, remarks: true }
     }).catch(() => []),
     (selectedChild.classId ? fetchLatestExam(selectedChild.classId) : Promise.resolve(null)).catch(() => null),
@@ -126,16 +128,13 @@ export default async function ParentDashboard({
   ]);
 
   const childClass = selectedChild.class;
-  const presentedDays = attendanceRecords.filter((a) => a.status === "PRESENT").length;
-  const absentedDays = attendanceRecords.filter((a) => a.status === "ABSENT").length;
-  const lateDays = attendanceRecords.filter((a) => a.status === "LATE").length;
-  const leaveDays = attendanceRecords.filter((a) => a.status === "LEAVE").length;
-  const recordedTotal = attendanceRecords.length;
-
-  // Each calendar worked day consists of 2 sessions: Forenoon and Afternoon
-  const attendedSessions = presentedDays + lateDays;
-  const totalSessions = Math.max(calendarStats.totalActiveDays * 2, recordedTotal, attendedSessions, 1);
-  const attendancePercentage = calculateAttendancePercentage(attendedSessions, totalSessions);
+  const presentedDays = attSummary.presentCount;
+  const absentedDays = attSummary.absentCount;
+  const lateDays = attSummary.lateCount;
+  const leaveDays = attSummary.leaveCount;
+  const attendedSessions = attSummary.attendedSessions;
+  const totalSessions = attSummary.totalWorkingSessions;
+  const attendancePercentage = attSummary.percentage;
 
   // Recent attendance entries (last 5 recorded days)
   const recentAttendance = attendanceRecords.slice(0, 5);

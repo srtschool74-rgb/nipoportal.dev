@@ -4,8 +4,9 @@ import { prisma } from "@/backend/db/prisma";
 import { revalidatePath } from "next/cache";
 import { parseDateString } from "@/backend/lib/services/attendanceCalculation";
 import { dispatchNotification } from "@/lib/dispatcher";
+import { invalidateAllStatsCaches } from "@/backend/services/stats";
 
-function revalidateAllCalendarAndAttendancePaths() {
+async function revalidateAllCalendarAndAttendancePaths() {
   revalidatePath("/dashboard/admin/calendar");
   revalidatePath("/dashboard/teacher/calendar");
   revalidatePath("/dashboard/parent/calendar");
@@ -15,6 +16,7 @@ function revalidateAllCalendarAndAttendancePaths() {
   revalidatePath("/dashboard/parent/attendance");
   revalidatePath("/dashboard/parent");
   revalidatePath("/dashboard");
+  await invalidateAllStatsCaches();
 }
 
 /**
@@ -79,7 +81,7 @@ export async function setSchoolDayStatusAction(payload: {
       tag: `calendar-${payload.date}`,
     }).catch((err) => console.warn("[CalendarAction] Push error:", err));
 
-    revalidateAllCalendarAndAttendancePaths();
+    await revalidateAllCalendarAndAttendancePaths();
     return { success: true };
   } catch (error: unknown) {
     console.error("Error setting school day status:", error);
@@ -100,7 +102,7 @@ export async function deleteSchoolDayStatusAction(dateStr: string) {
       where: { date: targetDate },
     });
 
-    revalidateAllCalendarAndAttendancePaths();
+    await revalidateAllCalendarAndAttendancePaths();
     return { success: true };
   } catch (error: unknown) {
     console.error("Error resetting school day status:", error);
@@ -138,7 +140,7 @@ export async function batchSetSchoolDaysAction(
       });
     }
 
-    revalidateAllCalendarAndAttendancePaths();
+    await revalidateAllCalendarAndAttendancePaths();
     return { success: true, count: days.length };
   } catch (error: unknown) {
     console.error("Error batch setting school days:", error);
@@ -186,7 +188,7 @@ export async function createEventAction(formData: FormData) {
       },
     });
 
-    revalidateAllCalendarAndAttendancePaths();
+    await revalidateAllCalendarAndAttendancePaths();
     return { success: true };
   } catch (error: unknown) {
     console.error("Error creating event:", error);
@@ -200,7 +202,7 @@ export async function createEventAction(formData: FormData) {
 export async function deleteEventAction(id: string) {
   try {
     await prisma.calendarEvent.delete({ where: { id } });
-    revalidateAllCalendarAndAttendancePaths();
+    await revalidateAllCalendarAndAttendancePaths();
     return { success: true };
   } catch (error: unknown) {
     console.error("Error deleting event:", error);

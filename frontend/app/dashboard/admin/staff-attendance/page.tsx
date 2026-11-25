@@ -5,9 +5,9 @@ import StaffAttendanceClient, { StaffRecordItem } from "./StaffAttendanceClient"
 import {
   getEffectiveAcademicYearRange,
   countSchoolWorkingDays,
-  calculateAttendancePercentage,
   getLocalTodayDateString,
 } from "@/backend/lib/services/attendanceCalculation";
+import { summarizeAttendanceRecords } from "@/backend/services/stats";
 
 export const dynamic = "force-dynamic";
 
@@ -90,18 +90,7 @@ export default async function AdminStaffAttendancePage({
     const forenoonStatus = normalizeStatus(fnRecord?.status);
     const afternoonStatus = normalizeStatus(anRecord?.status);
 
-    const presentedDays = staff.attendances.filter((a) => a.status === "PRESENT").length;
-    const absentedDays = staff.attendances.filter((a) => a.status === "ABSENT").length;
-    const lateDays = staff.attendances.filter((a) => a.status === "LATE").length;
-    const leaveDays = staff.attendances.filter((a) => a.status === "LEAVE").length;
-    const recordedTotal = presentedDays + absentedDays + lateDays + leaveDays;
-
-    // Each school working day in calendar has 2 sessions (FN and AN)
-    const officialWorkingSessions = officialWorkingDays * 2;
-    const effectiveWorkingUnits = Math.max(officialWorkingSessions, recordedTotal, 1);
-
-    const attendedSessions = presentedDays + lateDays;
-    const attendancePercentage = calculateAttendancePercentage(attendedSessions, effectiveWorkingUnits);
+    const stats = summarizeAttendanceRecords(staff.attendances, officialWorkingDays);
 
     return {
       id: staff.id,
@@ -113,12 +102,12 @@ export default async function AdminStaffAttendancePage({
       },
       phone: staff.phone,
       designation: staff.designation,
-      totalSessions: effectiveWorkingUnits,
-      presentedDays,
-      absentedDays,
-      lateDays,
-      leaveDays,
-      attendancePercentage,
+      totalSessions: stats.totalWorkingSessions,
+      presentedDays: stats.presentCount,
+      absentedDays: stats.absentCount,
+      lateDays: stats.lateCount,
+      leaveDays: stats.leaveCount,
+      attendancePercentage: stats.percentage,
       forenoonStatus,
       forenoonRemarks: fnRecord?.remarks || "",
       afternoonStatus,

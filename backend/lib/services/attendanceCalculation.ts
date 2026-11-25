@@ -1,4 +1,5 @@
 import { prisma } from "@/backend/db/prisma";
+import { getSchoolNow, getSchoolToday } from "@/lib/time";
 
 export type DayScheduleStatus = "WORKING_DAY" | "LEAVE_DAY";
 
@@ -61,8 +62,6 @@ export function parseDateString(dateStr: string): Date {
   return new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
 }
 
-import { getSchoolToday } from "@/lib/time";
-
 /**
  * Returns today's YYYY-MM-DD string in the Indian School timezone (Asia/Kolkata).
  * Permanently flips to the new day at exactly 12:00:00 AM IST midnight.
@@ -72,16 +71,14 @@ export function getLocalTodayDateString(): string {
 }
 
 /**
- * Academic Year Boundary: June 1 to May 31.
+ * Academic Year Boundary: June 1 to May 31 strictly in Asia/Kolkata timezone.
  */
 export function getAcademicYearRange(refDate: Date = new Date()): { start: Date; end: Date } {
-  const currentYear = refDate.getFullYear();
-  const currentMonth = refDate.getMonth(); // 0 is January, 5 is June
-
-  // If before June, the cycle began June 1 of previous calendar year
-  const startYear = currentMonth >= 5 ? currentYear : currentYear - 1;
-  const start = new Date(startYear, 5, 1, 0, 0, 0, 0); // June 1
-  const end = new Date(startYear + 1, 4, 31, 23, 59, 59, 999); // May 31 of next year
+  const parts = getSchoolNow(refDate);
+  // Academic cycle runs June (month 6) through May (month 5)
+  const startYear = parts.month >= 6 ? parts.year : parts.year - 1;
+  const start = parseDateString(`${startYear}-06-01`);
+  const end = new Date(Date.UTC(startYear + 1, 4, 31, 23, 59, 59, 999));
   return { start, end };
 }
 
@@ -119,8 +116,7 @@ export async function getEffectiveAcademicYearRange(
     }
 
     if (batch?.startDate) {
-      let start = new Date(batch.startDate);
-      start.setHours(0, 0, 0, 0);
+      let start = parseDateString(toDateString(batch.startDate));
 
       const refStr = toDateString(refDate);
       let startStr = toDateString(start);
@@ -151,10 +147,12 @@ export async function getEffectiveAcademicYearRange(
 
       let end: Date;
       if (batch.endDate) {
-        end = new Date(batch.endDate);
-        end.setHours(23, 59, 59, 999);
+        const endStr = toDateString(batch.endDate);
+        const [ey, em, ed] = endStr.split("-").map(Number);
+        end = new Date(Date.UTC(ey, em - 1, ed, 23, 59, 59, 999));
       } else {
-        end = new Date(start.getFullYear() + 1, start.getMonth(), start.getDate(), 23, 59, 59, 999);
+        const sParts = toDateString(start).split("-").map(Number);
+        end = new Date(Date.UTC(sParts[0] + 1, sParts[1] - 1, sParts[2], 23, 59, 59, 999));
       }
 
       return { start, end };
@@ -349,7 +347,7 @@ export function calculateAttendancePercentage(
   const safeTotal = Math.max(safePresent, Number(totalWorkingUnits) || 0);
 
   if (safeTotal <= 0) {
-    return "100.0";
+    return "0.0";
   }
 
   const pct = (safePresent / safeTotal) * 100;
@@ -393,7 +391,7 @@ export async function getStudentStandardAttendanceStats(
 
   const totalRecordedSessions = presentCount + absentCount + lateCount + leaveCount;
   const attendedSessions = presentCount + lateCount;
-  const totalSessionsOrDays = Math.max(officialWorkingSessions, totalRecordedSessions, attendedSessions, 1);
+  const totalSessionsOrDays = Math.max(officialWorkingSessions, totalRecordedSessions, attendedSessions);
   const percentage = calculateAttendancePercentage(attendedSessions, totalSessionsOrDays);
 
   return {
@@ -440,7 +438,7 @@ export async function getTeacherStandardAttendanceStats(
   const officialWorkingSessions = officialWorkingDays * 2;
   const totalRecordedSessions = presentCount + absentCount + lateCount + leaveCount;
   const attendedSessions = presentCount + lateCount;
-  const totalDays = Math.max(officialWorkingSessions, totalRecordedSessions, attendedSessions, 1);
+  const totalDays = Math.max(officialWorkingSessions, totalRecordedSessions, attendedSessions);
 
   const percentage = calculateAttendancePercentage(attendedSessions, totalDays);
 

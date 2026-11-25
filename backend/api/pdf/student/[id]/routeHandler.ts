@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
 import { prisma } from "@/backend/db/prisma";
+import { getStudentAttendanceSummary } from "@/backend/services/stats";
 import PDFDocument from 'pdfkit';
 
 export async function GET(
@@ -28,6 +29,8 @@ export async function GET(
     if (!student) {
       return new NextResponse("Student not found", { status: 404 });
     }
+
+    const attSummary = await getStudentAttendanceSummary(student.id, { classId: student.classId });
 
     // PDFKit requires streams. We can use a readable stream to pipe it to the NextResponse.
     const stream = new ReadableStream({
@@ -90,13 +93,14 @@ export async function GET(
         ];
         drawTable('Personal Information', personalData);
 
-        const totalDays = student.attendances.length;
-        const presentDays = student.attendances.filter(a => a.status === 'PRESENT').length;
-        const attPercent = totalDays > 0 ? Math.min(100, Math.max(0, Math.round((presentDays / Math.max(totalDays, presentDays, 1)) * 100))) : 0;
-
         const academicData = [
           { label: 'Class', value: student.class ? `${student.class.name} - ${student.class.section}` : 'Unassigned' },
-          { label: 'Attendance', value: `${attPercent}% (${presentDays} / ${totalDays} days)` },
+          {
+            label: 'Attendance',
+            value: attSummary.hasWorkingSessions
+              ? `${attSummary.percentage}% (${attSummary.attendedSessions} / ${attSummary.totalWorkingSessions} sessions)`
+              : `0.0% (0 / 0 sessions)`,
+          },
         ];
         drawTable('Academic Information', academicData);
 

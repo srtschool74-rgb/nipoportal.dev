@@ -6,9 +6,9 @@ import {
   getAcademicYearRange,
   getEffectiveAcademicYearRange,
   countSchoolWorkingDays,
-  calculateAttendancePercentage,
   getLocalTodayDateString,
 } from "@/backend/lib/services/attendanceCalculation";
+import { summarizeAttendanceRecords } from "@/backend/services/stats";
 
 export default async function AdminTeacherAttendancePage({
   searchParams,
@@ -80,18 +80,7 @@ export default async function AdminTeacherAttendancePage({
     const forenoonStatus = normalizeStatus(fnRecord?.status);
     const afternoonStatus = normalizeStatus(anRecord?.status);
 
-    const presentedDays = teacher.attendances.filter((a) => a.status === "PRESENT").length;
-    const absentedDays = teacher.attendances.filter((a) => a.status === "ABSENT").length;
-    const lateDays = teacher.attendances.filter((a) => a.status === "LATE").length;
-    const leaveDays = teacher.attendances.filter((a) => a.status === "LEAVE").length;
-    const recordedTotal = presentedDays + absentedDays + lateDays + leaveDays;
-
-    // Each school worked day in calendar has 2 sessions (FN and AN)
-    const officialWorkingSessions = officialWorkingDays * 2;
-    const effectiveWorkingUnits = Math.max(officialWorkingSessions, recordedTotal, 1);
-
-    const attendedSessions = presentedDays + lateDays;
-    const attendancePercentage = calculateAttendancePercentage(attendedSessions, effectiveWorkingUnits);
+    const stats = summarizeAttendanceRecords(teacher.attendances, officialWorkingDays);
 
     return {
       id: teacher.id,
@@ -101,12 +90,12 @@ export default async function AdminTeacherAttendancePage({
         email: teacher.user.email,
         role: teacher.user.role,
       },
-      totalSessions: effectiveWorkingUnits,
-      presentedDays,
-      absentedDays,
-      lateDays,
-      leaveDays,
-      attendancePercentage,
+      totalSessions: stats.totalWorkingSessions,
+      presentedDays: stats.presentCount,
+      absentedDays: stats.absentCount,
+      lateDays: stats.lateCount,
+      leaveDays: stats.leaveCount,
+      attendancePercentage: stats.percentage,
       forenoonStatus,
       forenoonRemarks: fnRecord?.remarks || "",
       afternoonStatus,

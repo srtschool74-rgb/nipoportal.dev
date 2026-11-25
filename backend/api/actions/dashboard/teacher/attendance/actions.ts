@@ -9,6 +9,7 @@ import { isDateInCurrentWeek } from "@/frontend/utils/attendanceDateUtils";
 import { getSessionDateTime } from "@/backend/lib/services/attendanceCalculation";
 import { verifyTeacherClassAccess } from "@/lib/teacher/getTeacherClasses";
 import { dispatchPortalNotification } from "@/lib/notifications";
+import { invalidateAllStatsCaches } from "@/backend/services/stats";
 
 function formatRemarksWithSession(remarks: string | undefined | null, session: "FORENOON" | "AFTERNOON"): string {
   const cleanRemarks = (remarks || "").replace(/\s*\((FORENOON|AFTERNOON)\)/gi, "").trim();
@@ -129,6 +130,7 @@ export async function updateSingleAttendance(data: {
     revalidatePath("/dashboard/teacher/attendance");
     revalidatePath("/dashboard/parent/attendance");
     revalidatePath("/dashboard/admin/attendance");
+    await invalidateAllStatsCaches();
 
     return { success: true };
   } catch (error: unknown) {
@@ -264,6 +266,7 @@ export async function saveBulkAttendance(
     revalidatePath("/dashboard/teacher/attendance");
     revalidatePath("/dashboard/parent/attendance");
     revalidatePath("/dashboard/admin/attendance");
+    await invalidateAllStatsCaches();
 
     return { success: true };
   } catch (error: unknown) {

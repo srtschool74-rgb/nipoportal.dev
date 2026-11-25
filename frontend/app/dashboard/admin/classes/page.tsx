@@ -1,6 +1,6 @@
 import { getCachedServerSession } from "@/backend/auth/sessionCache";
 import { prisma } from "@/backend/db/prisma";
-import { getClassCounts } from "@/backend/services/stats";
+import { getClassAttendanceSummary, getClassCounts } from "@/backend/services/stats";
 import styles from "../../dashboard.module.css";
 import ClassListClient from "./ClassListClient";
 import Link from "next/link";
@@ -50,6 +50,20 @@ export default async function AdminClassesPage() {
     getClassCounts({ role: "ADMIN" }),
   ]);
 
+  const attSummaryMap = await getClassAttendanceSummary(classes.map((c) => c.id));
+  const classAttendanceSummary: Record<
+    string,
+    { attendedSessions: number; totalWorkingSessions: number; percentage: string; hasWorkingSessions: boolean }
+  > = {};
+  attSummaryMap.forEach((val, key) => {
+    classAttendanceSummary[key] = {
+      attendedSessions: val.attendedSessions,
+      totalWorkingSessions: val.totalWorkingSessions,
+      percentage: val.percentage,
+      hasWorkingSessions: val.hasWorkingSessions,
+    };
+  });
+
   return (
     <div className={styles.dashboard}>
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-4">
@@ -90,7 +104,7 @@ export default async function AdminClassesPage() {
         </div>
       )}
       
-      <ClassListClient classes={classes as any} teachers={teachers} />
+      <ClassListClient classes={classes as any} teachers={teachers} classAttendanceSummary={classAttendanceSummary} />
     </div>
   );
 }

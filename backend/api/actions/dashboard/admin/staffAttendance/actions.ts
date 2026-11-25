@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
 import { getSessionDateTime } from "@/backend/lib/services/attendanceCalculation";
+import { invalidateAllStatsCaches } from "@/backend/services/stats";
 
 function formatRemarksWithSession(remarks: string | undefined | null, session: "FORENOON" | "AFTERNOON"): string {
   const cleanRemarks = (remarks || "").replace(/\s*\((FORENOON|AFTERNOON)\)/gi, "").trim();
@@ -67,6 +68,7 @@ export async function adminUpdateStaffAttendance(
 
     revalidatePath("/dashboard/admin/staff-attendance");
     revalidatePath("/dashboard/admin/attendance");
+    await invalidateAllStatsCaches();
     return { success: true };
   } catch (error: unknown) {
     if (error instanceof Error) {
@@ -126,6 +128,7 @@ export async function adminBulkStaffAttendance(
 
     revalidatePath("/dashboard/admin/staff-attendance");
     revalidatePath("/dashboard/admin/attendance");
+    await invalidateAllStatsCaches();
     return { success: true, count: data.length };
   } catch (error: unknown) {
     if (error instanceof Error) {

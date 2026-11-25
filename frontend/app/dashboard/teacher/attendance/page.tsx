@@ -8,9 +8,10 @@ import { getTeacherClasses, formatClassName } from "@/lib/teacher/getTeacherClas
 import {
   getEffectiveAcademicYearRange,
   countSchoolWorkingDays,
-  calculateAttendancePercentage,
   getLocalTodayDateString,
+  toDateString,
 } from "@/backend/lib/services/attendanceCalculation";
+import { summarizeAttendanceRecords } from "@/backend/services/stats";
 
 export default async function TeacherAttendancePage({
   searchParams,
@@ -138,24 +139,15 @@ export default async function TeacherAttendancePage({
   const forenoonTeacherStatus = normalizeStatus(fnTeacherRecord?.status);
   const afternoonTeacherStatus = normalizeStatus(anTeacherRecord?.status);
 
-  const teacherPresentedDays = teacher.attendances.filter((a) => a.status === "PRESENT").length;
-  const teacherAbsentedDays = teacher.attendances.filter((a) => a.status === "ABSENT").length;
-  const teacherLateDays = teacher.attendances.filter((a) => a.status === "LATE").length;
-  const teacherLeaveDays = teacher.attendances.filter((a) => a.status === "LEAVE").length;
-  const teacherRecordedTotal = teacherPresentedDays + teacherAbsentedDays + teacherLateDays + teacherLeaveDays;
-
-  const officialTeacherWorkingSessions = officialWorkingDays * 2;
-  const totalTeacherSessions = Math.max(officialTeacherWorkingSessions, teacherRecordedTotal, 1);
-  const attendedTeacherSessions = teacherPresentedDays + teacherLateDays;
-  const teacherAttendancePercentage = calculateAttendancePercentage(attendedTeacherSessions, totalTeacherSessions);
+  const teacherAttStats = summarizeAttendanceRecords(teacher.attendances, officialWorkingDays);
 
   const teacherAttendanceData = {
-    totalSessions: totalTeacherSessions,
-    presentedDays: teacherPresentedDays,
-    absentedDays: teacherAbsentedDays,
-    lateDays: teacherLateDays,
-    leaveDays: teacherLeaveDays,
-    attendancePercentage: teacherAttendancePercentage,
+    totalSessions: teacherAttStats.totalWorkingSessions,
+    presentedDays: teacherAttStats.presentCount,
+    absentedDays: teacherAttStats.absentCount,
+    lateDays: teacherAttStats.lateCount,
+    leaveDays: teacherAttStats.leaveCount,
+    attendancePercentage: teacherAttStats.percentage,
     todayDate: todayStr,
     forenoonStatus: forenoonTeacherStatus,
     forenoonRemarks: fnTeacherRecord?.remarks || "",
@@ -189,7 +181,7 @@ export default async function TeacherAttendancePage({
   if (myClass && canManage !== "false") {
     const serializedStudents: TeacherStudentItem[] = myClass.students.map((s) => {
       const todayRecords = s.attendances.filter((a) => {
-        const attDate = new Date(a.date).toISOString().split("T")[0];
+        const attDate = toDateString(a.date);
         return attDate === todayStr;
       });
 
@@ -208,16 +200,7 @@ export default async function TeacherAttendancePage({
       const fnStatus = normalizeStatus(fnRecord?.status);
       const anStatus = normalizeStatus(anRecord?.status);
 
-      const presentCount = s.attendances.filter((a) => a.status === "PRESENT").length;
-      const absentCount = s.attendances.filter((a) => a.status === "ABSENT").length;
-      const lateCount = s.attendances.filter((a) => a.status === "LATE").length;
-      const leaveCount = s.attendances.filter((a) => a.status === "LEAVE").length;
-      const recordedTotal = presentCount + absentCount + lateCount + leaveCount;
-
-      const officialWorkingSessions = officialWorkingDays * 2;
-      const totalWorkingSessions = Math.max(officialWorkingSessions, recordedTotal, 1);
-      const attendedSessions = presentCount + lateCount;
-      const attendancePercentage = calculateAttendancePercentage(attendedSessions, totalWorkingSessions);
+      const sStats = summarizeAttendanceRecords(s.attendances, officialWorkingDays);
 
       return {
         id: s.id,
@@ -229,12 +212,12 @@ export default async function TeacherAttendancePage({
         afternoonRemarks: anRecord?.remarks || "",
         currentStatus: fnStatus,
         currentRemarks: fnRecord?.remarks || "",
-        attendancePercentage,
-        totalSessions: totalWorkingSessions,
-        presentCount,
-        absentCount,
-        lateCount,
-        leaveCount,
+        attendancePercentage: sStats.percentage,
+        totalSessions: sStats.totalWorkingSessions,
+        presentCount: sStats.presentCount,
+        absentCount: sStats.absentCount,
+        lateCount: sStats.lateCount,
+        leaveCount: sStats.leaveCount,
         recentHistory: s.attendances.slice(0, 30).map((a) => {
           const isAN = a.remarks?.toUpperCase().includes("AFTERNOON") || new Date(a.date).getUTCHours() >= 12;
           return {

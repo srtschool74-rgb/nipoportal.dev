@@ -27,12 +27,21 @@ type ClassWithRelations = Class & {
   students: StudentWithRelations[];
 };
 
+type ClassAttendanceSummaryItem = {
+  attendedSessions: number;
+  totalWorkingSessions: number;
+  percentage: string;
+  hasWorkingSessions: boolean;
+};
+
 export default function ClassListClient({
   classes,
-  teachers
+  teachers,
+  classAttendanceSummary,
 }: {
   classes: ClassWithRelations[];
   teachers: TeacherWithUser[];
+  classAttendanceSummary?: Record<string, ClassAttendanceSummaryItem>;
 }) {
   const router = useRouter();
   const confirm = useConfirm();
@@ -656,8 +665,8 @@ export default function ClassListClient({
             const sections = groupedClasses[className];
 
             let totalStudents = 0;
-            let totalPresent = 0;
-            let totalAttendances = 0;
+            let sumAttendedSessions = 0;
+            let sumWorkingSessions = 0;
 
             const teachersList = new Set<string>();
 
@@ -665,13 +674,25 @@ export default function ClassListClient({
               totalStudents += cls.students.length;
               if (cls.teacher) teachersList.add(cls.teacher.user.name);
 
-              cls.students.forEach((s) => {
-                totalAttendances += s.attendances.length;
-                totalPresent += s.attendances.filter((a) => a.status === 'PRESENT').length;
-              });
+              const summary = classAttendanceSummary?.[cls.id];
+              if (summary) {
+                sumAttendedSessions += summary.attendedSessions;
+                sumWorkingSessions += summary.totalWorkingSessions;
+              } else {
+                cls.students.forEach((s) => {
+                  sumWorkingSessions += s.attendances.length;
+                  sumAttendedSessions += s.attendances.filter(
+                    (a) => a.status === "PRESENT" || a.status === "LATE"
+                  ).length;
+                });
+              }
             });
 
-            const attendancePercent = totalAttendances > 0 ? Math.round((totalPresent / totalAttendances) * 100) : 0;
+            const hasWorkingSessions = sumWorkingSessions > 0;
+            const attendancePercentValue = hasWorkingSessions
+              ? Math.min(100, Math.max(0, Number(((sumAttendedSessions / sumWorkingSessions) * 100).toFixed(1))))
+              : 0;
+            const attendancePercentLabel = hasWorkingSessions ? `${attendancePercentValue.toFixed(1)}%` : "N/A";
             const teacherNames = Array.from(teachersList).join(', ') || 'None assigned';
 
             return (
@@ -753,8 +774,8 @@ export default function ClassListClient({
                   </div>
                   <div style={{ padding: '0.65rem 0.85rem', background: 'rgba(0,0,0,0.02)', borderRadius: '8px' }}>
                     <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: 0, marginBottom: '0.2rem', fontWeight: 600 }}>Avg. Attendance</p>
-                    <p style={{ fontSize: '1.15rem', fontWeight: 700, margin: 0, color: attendancePercent >= 75 ? "var(--success)" : attendancePercent >= 60 ? "var(--warning)" : "var(--danger)" }}>
-                      {totalAttendances > 0 ? `${attendancePercent}%` : 'N/A'}
+                    <p style={{ fontSize: '1.15rem', fontWeight: 700, margin: 0, color: !hasWorkingSessions ? "var(--text-secondary)" : attendancePercentValue >= 75 ? "var(--success)" : attendancePercentValue >= 60 ? "var(--warning)" : "var(--danger)" }}>
+                      {attendancePercentLabel}
                     </p>
                   </div>
                   <div style={{ gridColumn: '1 / -1', padding: '0.75rem', background: 'rgba(0,0,0,0.02)', borderRadius: '8px', border: '1px solid var(--border-color)' }}>

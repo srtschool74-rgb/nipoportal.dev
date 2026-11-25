@@ -8,7 +8,8 @@ import ClassSelector from "./ClassSelector";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { startOfSchoolDay, endOfSchoolDay, getSchoolNow } from "@/lib/time";
-import { getAdminDashboardSummary } from "@/backend/services/stats";
+import { getAdminDashboardSummary, getParentStats, summarizeAttendanceRecords } from "@/backend/services/stats";
+import { countSchoolWorkingDays, getEffectiveAcademicYearRange } from "@/backend/lib/services/attendanceCalculation";
 import AdminDashboardStatsGrid from "@/frontend/components/admin/AdminDashboardStatsGrid";
 
 export const dynamic = "force-dynamic";
@@ -111,6 +112,7 @@ export default async function AdminDashboardPage({
   let sectionCount = 0;
   let classParentsCount = 0;
   let totalClassStudents = 0;
+  let officialClassWorkingDays = 0;
   let currentPage = 1;
   const pageSize = 20;
   let totalPages = 1;
@@ -146,12 +148,32 @@ export default async function AdminDashboardPage({
       if (selectedClassData) {
         const todayStart = startOfSchoolDay();
         const todayEnd = endOfSchoolDay();
+        const { start: academicStart } = await getEffectiveAcademicYearRange(todayEnd, classId);
 
-        const [sectionCountRes, totalClassStudentsRes, studentsDataRes, teachersDataRes, todaysAttendancesRes, marksRes] = await Promise.all([
+        const [
+          sectionCountRes,
+          totalClassStudentsRes,
+          studentsDataRes,
+          teachersDataRes,
+          todaysAttendancesRes,
+          marksRes,
+          classParentStatsRes,
+          workingDaysRes,
+        ] = await Promise.all([
           prisma.class.count({ where: { name: selectedClassData.name, isActive: true } }).catch(() => 0),
-          prisma.student.count({ where: { classId, isActive: true } }).catch(() => 0),
+          prisma.student.count({
+            where: {
+              classId,
+              isActive: true,
+              OR: [{ enrollmentStatus: null }, { enrollmentStatus: { notIn: ["GRADUATED", "TRANSFERRED"] } }],
+            },
+          }).catch(() => 0),
           prisma.student.findMany({
-            where: { classId, isActive: true },
+            where: {
+              classId,
+              isActive: true,
+              OR: [{ enrollmentStatus: null }, { enrollmentStatus: { notIn: ["GRADUATED", "TRANSFERRED"] } }],
+            },
             orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
             take: pageSize,
             skip: (currentPage - 1) * pageSize,
@@ -178,7 +200,10 @@ export default async function AdminDashboardPage({
                   },
                 },
               },
-              attendances: { select: { status: true } },
+              attendances: {
+                where: { date: { gte: academicStart, lte: todayEnd } },
+                select: { status: true },
+              },
             },
           }).catch(() => []),
           prisma.teacher.findMany({
@@ -212,6 +237,14 @@ export default async function AdminDashboardPage({
             take: 500,
             orderBy: { createdAt: 'desc' },
           }).catch(() => []),
+          getParentStats({ role: "ADMIN" }, { classId }).catch(() => ({
+            totalParents: 0,
+            activeParents: 0,
+            enabledParents: 0,
+            parentsWithoutActiveStudents: 0,
+            totalStudentsCount: 0,
+          })),
+          countSchoolWorkingDays(academicStart, todayEnd, classId).catch(() => 0),
         ]);
 
         sectionCount = sectionCountRes;
@@ -219,6 +252,7 @@ export default async function AdminDashboardPage({
         totalPages = Math.max(1, Math.ceil(totalClassStudents / pageSize));
         studentsData = (studentsDataRes || []) as any;
         teachersData = teachersDataRes || [];
+        officialClassWorkingDays = workingDaysRes || 0;
         const todaysAttendances = todaysAttendancesRes || [];
         const marks = marksRes || [];
 
@@ -228,13 +262,7 @@ export default async function AdminDashboardPage({
           if (att.status === 'ABSENT' || att.status === 'LEAVE') attendanceStats.absent++;
         });
 
-        const classParentsSet = new Set<string>();
-        studentsData.forEach(s => {
-          s.parents?.forEach(p => {
-            if (p.parent?.id) classParentsSet.add(p.parent.id);
-          });
-        });
-        classParentsCount = classParentsSet.size;
+        classParentsCount = classParentStatsRes.totalParents;
 
         let passCount = 0;
         let failCount = 0;
@@ -508,9 +536,8 @@ export default async function AdminDashboardPage({
                 </thead>
                 <tbody>
                   {studentsData.map(student => {
-                    const totalDays = student.attendances.length;
-                    const presentDays = student.attendances.filter((a) => a.status === 'PRESENT').length;
-                    const attPercent = totalDays > 0 ? Math.min(100, Math.max(0, Math.round((presentDays / Math.max(totalDays, presentDays, 1)) * 100))) : 0;
+                    const attStats = summarizeAttendanceRecords(student.attendances, officialClassWorkingDays);
+                    const attPercent = attStats.percentageValue ?? 0;
 
                     return (
                       <tr key={student.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
@@ -552,8 +579,8 @@ export default async function AdminDashboardPage({
                           )}
                         </td>
                         <td style={{ padding: '0.75rem' }}>
-                          <span style={{ color: attPercent >= 75 ? "var(--success)" : attPercent >= 60 ? "var(--warning)" : "var(--danger)", fontWeight: 600 }}>
-                            {attPercent}%
+                          <span style={{ color: attStats.hasWorkingSessions ? (attPercent >= 75 ? "var(--success)" : attPercent >= 60 ? "var(--warning)" : "var(--danger)") : "var(--text-secondary)", fontWeight: 600 }}>
+                            {attStats.percentage}%
                           </span>
                         </td>
                         <td style={{ padding: '0.75rem' }}>

@@ -4,7 +4,8 @@ import { Calendar as CalendarIcon, CheckCircle, XCircle, Clock, CalendarDays, Aw
 import { getSystemSetting } from "@/backend/api/actions/dashboard/admin/settings/actions";
 import { getParentAndSelectedChild } from "../parentChildHelper";
 import { getSchoolCalendarStats } from "@/backend/api/actions/dashboard/attendance/calendarStats";
-import { calculateAttendancePercentage, isForenoonRecord, isAfternoonRecord } from "@/backend/lib/services/attendanceCalculation";
+import { getEffectiveAcademicYearRange, isForenoonRecord, isAfternoonRecord, toDateString } from "@/backend/lib/services/attendanceCalculation";
+import { getStudentAttendanceSummary } from "@/backend/services/stats";
 
 interface DayAttendanceGroup {
   dateStr: string;
@@ -41,36 +42,35 @@ export default async function ParentAttendancePage({
     );
   }
 
-  // Fetch Calendar stats and attendance records concurrently
-  const [calendarStats, attendanceRecords] = await Promise.all([
+  // Fetch Calendar stats, canonical attendance summary, and records concurrently
+  const { start: academicStart } = await getEffectiveAcademicYearRange(new Date(), selectedChild.classId);
+  const [calendarStats, attSummary, attendanceRecords] = await Promise.all([
     getSchoolCalendarStats(new Date(), selectedChild.classId),
+    getStudentAttendanceSummary(selectedChild.id, { classId: selectedChild.classId }),
     prisma.attendance.findMany({
-      where: { studentId: selectedChild.id },
+      where: {
+        studentId: selectedChild.id,
+        date: { gte: academicStart },
+      },
       orderBy: { date: "desc" },
       select: { id: true, date: true, status: true, remarks: true }
     })
   ]);
 
-  const presentCount = attendanceRecords.filter((a) => a.status === "PRESENT").length;
-  const absentCount = attendanceRecords.filter((a) => a.status === "ABSENT").length;
-  const lateCount = attendanceRecords.filter((a) => a.status === "LATE").length;
-  const legacyLeaveCount = attendanceRecords.filter((a) => a.status === "LEAVE").length;
+  const presentCount = attSummary.presentCount;
+  const absentCount = attSummary.absentCount;
+  const lateCount = attSummary.lateCount;
+  const legacyLeaveCount = attSummary.leaveCount;
+  const totalWorkingSessions = attSummary.totalWorkingSessions;
+  const attendedSessions = attSummary.attendedSessions;
+  const percentage = attSummary.percentage;
 
-  // Each school worked day in the calendar consists of 2 sessions: Forenoon and Afternoon
-  const officialWorkingSessions = calendarStats.totalActiveDays * 2;
-  const totalRecordedSessions = presentCount + absentCount + lateCount + legacyLeaveCount;
-  const totalWorkingSessions = Math.max(officialWorkingSessions, totalRecordedSessions, 1);
-
-  // Present and Late are counted in attendance percentage; Late tracks punctuality
-  const attendedSessions = presentCount + lateCount;
-  const percentage = calculateAttendancePercentage(attendedSessions, totalWorkingSessions);
-
-  // Group records by calendar day (YYYY-MM-DD) into Forenoon and Afternoon
+  // Group records by calendar day (YYYY-MM-DD in Asia/Kolkata) into Forenoon and Afternoon
   const daysMap = new Map<string, DayAttendanceGroup>();
 
   for (const record of attendanceRecords) {
     const d = new Date(record.date);
-    const dateStr = d.toISOString().split("T")[0];
+    const dateStr = toDateString(d);
 
     if (!daysMap.has(dateStr)) {
       daysMap.set(dateStr, {

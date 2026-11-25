@@ -6,9 +6,10 @@ import {
   getAcademicYearRange,
   getEffectiveAcademicYearRange,
   countSchoolWorkingDays,
-  calculateAttendancePercentage,
   getLocalTodayDateString,
+  toDateString,
 } from "@/backend/lib/services/attendanceCalculation";
+import { summarizeAttendanceRecords } from "@/backend/services/stats";
 
 export default async function AdminAttendancePage({
   searchParams,
@@ -60,7 +61,7 @@ export default async function AdminAttendancePage({
 
     serializedStudents = rawStudents.map((s) => {
       const todayRecords = s.attendances.filter((a) => {
-        const attDate = new Date(a.date).toISOString().split("T")[0];
+        const attDate = toDateString(a.date);
         return attDate === todayStr;
       });
 
@@ -87,19 +88,7 @@ export default async function AdminAttendancePage({
       const forenoonStatus = normalizeStatus(fnRecord?.status);
       const afternoonStatus = normalizeStatus(anRecord?.status);
 
-      const presentCount = s.attendances.filter((a) => a.status === "PRESENT").length;
-      const absentCount = s.attendances.filter((a) => a.status === "ABSENT").length;
-      const lateCount = s.attendances.filter((a) => a.status === "LATE").length;
-      const leaveCount = s.attendances.filter((a) => a.status === "LEAVE").length;
-      const recordedTotal = presentCount + absentCount + lateCount + leaveCount;
-
-      // Each school worked day in calendar has 2 sessions (Forenoon & Afternoon)
-      const officialWorkingSessions = officialWorkingDays * 2;
-      const totalWorkingSessions = Math.max(officialWorkingSessions, recordedTotal, 1);
-
-      // Present and Late are counted in attendance percentage; Late tracks tardiness
-      const attendedSessions = presentCount + lateCount;
-      const attendancePercentage = calculateAttendancePercentage(attendedSessions, totalWorkingSessions);
+      const stats = summarizeAttendanceRecords(s.attendances, officialWorkingDays);
 
       return {
         id: s.id,
@@ -114,12 +103,12 @@ export default async function AdminAttendancePage({
         afternoonRemarks: anRecord?.remarks || "",
         currentStatus: forenoonStatus,
         currentRemarks: fnRecord?.remarks || "",
-        attendancePercentage,
-        totalSessions: totalWorkingSessions,
-        presentCount,
-        absentCount,
-        lateCount,
-        leaveCount,
+        attendancePercentage: stats.percentage,
+        totalSessions: stats.totalWorkingSessions,
+        presentCount: stats.presentCount,
+        absentCount: stats.absentCount,
+        lateCount: stats.lateCount,
+        leaveCount: stats.leaveCount,
         recentHistory: s.attendances.slice(0, 30).map((a) => {
           const isAN = a.remarks?.toUpperCase().includes("AFTERNOON") || new Date(a.date).getUTCHours() >= 12;
           return {
