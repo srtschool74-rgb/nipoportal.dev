@@ -7,6 +7,8 @@ import {
   autoMapColumns,
   getTargetFieldsForRole,
   validateImportRows,
+  parseClassTeacher,
+  resolveClassSmart,
   ImportRole,
 } from "@/lib/import";
 
@@ -80,6 +82,7 @@ export interface RowValidationResult {
   fieldErrors: Record<string, string>;
   missingFields: string[];
   invalidFields: string[];
+  warnings?: Record<string, string>;
   duplicateWarnings: string[];
   conflictWarnings: string[];
   suggestions?: any[];
@@ -355,7 +358,8 @@ export function resolveClass(rawClass: string | undefined, classes: { id: string
 
 export async function parseAndScanWorkbook(
   buffer: Buffer | ArrayBuffer,
-  expectedType: ImportType
+  expectedType: ImportType,
+  options?: { autoFix?: boolean }
 ): Promise<ExcelScanResult> {
   // Use new resilient universal import engine for TEACHER and STUDENT_PARENT
   if (expectedType === "TEACHER" || expectedType === "STUDENT_PARENT") {
@@ -386,26 +390,28 @@ export async function parseAndScanWorkbook(
         rawRows: parsedData.rows,
         checkDb: true,
         availableClasses,
+        autoFix: options?.autoFix ?? true,
       });
 
       const validCount = validatedRows.filter(r => r.status === "VALID").length;
       const errorCount = validatedRows.filter(r => r.status === "NEEDS_CORRECTION").length;
       const dupCount = validatedRows.filter(r => r.status === "DUPLICATE_IN_FILE").length;
       const confCount = validatedRows.filter(r => r.status === "CONFLICT_DB").length;
+      const sampleCount = validatedRows.filter(r => r.status === "SAMPLE_ROW").length;
       const readyCount = validatedRows.filter(r => r.isReadyToImport).length;
 
       return {
         isValidWorkbook: true,
         detectedTemplate: expectedType,
         headersFound: parsedData.headers,
-        missingHeaders: columnMappings.filter(m => m.confidence === "UNMAPPED").map(m => m.excelHeader),
+        missingHeaders: [],
         unexpectedHeaders: [],
         totalRows: validatedRows.length,
         validRowsCount: validCount,
         errorRowsCount: errorCount,
         duplicateRowsCount: dupCount,
         conflictRowsCount: confCount,
-        sampleRowsCount: 0,
+        sampleRowsCount: sampleCount,
         readyToImportCount: readyCount,
         rows: validatedRows as any,
         availableClasses,
@@ -1403,11 +1409,53 @@ export async function executeImportTransaction(
 
   result.batchId = batch.id;
 
-  // Pre-fetch classes once outside row loop to avoid duplicate queries inside transactions
+  // Pre-fetch classes once outside row loop and auto-create any missing classes referenced in Student import
   const allDbClasses = await prisma.class.findMany({
     where: { isActive: true },
     select: { id: true, name: true, section: true }
   });
+
+  if (type === "STUDENT_PARENT") {
+    for (const r of rowsToImport) {
+      if (r.classId) continue;
+      const rawCls = String(r.class || r.classNameResolved || "").trim();
+      if (!rawCls) continue;
+
+      const smart = resolveClassSmart(rawCls, allDbClasses);
+      if (smart.matchedClass) {
+        r.classId = smart.matchedClass.id;
+        continue;
+      }
+
+      const parsedCls = parseClassTeacher(rawCls);
+      if (parsedCls.className && parsedCls.section) {
+        // Check again in case just created by an earlier iteration in this loop
+        const existingLocal = allDbClasses.find(
+          c =>
+            c.name.toLowerCase() === parsedCls.className!.toLowerCase() &&
+            c.section.toLowerCase() === parsedCls.section!.toLowerCase()
+        );
+        if (existingLocal) {
+          r.classId = existingLocal.id;
+        } else {
+          try {
+            const createdCls = await prisma.class.create({
+              data: {
+                name: parsedCls.className,
+                section: parsedCls.section,
+                isActive: true,
+              },
+              select: { id: true, name: true, section: true },
+            });
+            allDbClasses.push(createdCls);
+            r.classId = createdCls.id;
+          } catch (clsErr) {
+            console.warn(`[ExcelImportEngine] Could not auto-create class "${rawCls}":`, clsErr);
+          }
+        }
+      }
+    }
+  }
 
   // Pre-hash unique passwords in parallel to avoid CPU bottlenecks in row loop
   const uniquePasswords = Array.from(new Set(rowsToImport.map(r => {
@@ -1480,14 +1528,24 @@ export async function executeImportTransaction(
             const {
               studentFirstName,
               studentLastName,
+              firstName,
+              lastName,
               studentRollNo,
+              rollNo,
               admissionNo,
               studentDob,
+              dob,
+              gender,
+              batch,
               classId,
+              class: rawClassStr,
               residenceType,
               parentFirstName,
               parentLastName,
+              parentName,
               parentEmail,
+              alternateEmail,
+              googleEmail,
               parentPassword,
               parentPhone,
               parentAddress
@@ -1495,13 +1553,30 @@ export async function executeImportTransaction(
 
             const rawPwd = String(parentPassword || "Parent@123").trim();
             const hashedPass = passwordHashMap.get(rawPwd) || await hash(rawPwd, 10);
-            const rollStr = String(studentRollNo).trim();
+            const rollStr = String(studentRollNo || rollNo || "").trim();
             const admStr = String(admissionNo || `ADM${rollStr}`).trim();
-            const cleanParentEmail = String(parentEmail).trim().toLowerCase();
-            const dobDate = studentDob ? new Date(studentDob) : null;
-            const resType = residenceType === "HOSTEL" ? "HOSTEL" : "DAYSCHOLAR";
-            const studentFullName = `${studentFirstName} ${studentLastName || ""}`.trim();
-            const parentFullName = `${parentFirstName} ${parentLastName || ""}`.trim();
+            const cleanParentEmail = String(parentEmail || "").trim().toLowerCase();
+            const cleanAltEmail = alternateEmail ? String(alternateEmail).trim().toLowerCase() : null;
+            const cleanGoogleEmail = googleEmail
+              ? String(googleEmail).trim().toLowerCase()
+              : (cleanParentEmail.endsWith("@gmail.com") || cleanParentEmail.endsWith("@googlemail.com") ? cleanParentEmail : null);
+            const googleVerified = Boolean(
+              cleanGoogleEmail && (cleanGoogleEmail.endsWith("@gmail.com") || cleanGoogleEmail.endsWith("@googlemail.com"))
+            );
+            const rawDobVal = studentDob || dob;
+            const dobDate = rawDobVal ? new Date(rawDobVal) : null;
+            const resType = String(residenceType || "").toUpperCase().includes("HOSTEL") ? "HOSTEL" : "DAYSCHOLAR";
+            const finalFirst = String(studentFirstName || firstName || "").trim();
+            const finalLast = String(studentLastName || lastName || ".").trim() || ".";
+            const studentFullName = `${finalFirst} ${finalLast === "." ? "" : finalLast}`.trim();
+            const cleanParentFirst = String(parentFirstName || "").trim();
+            const cleanParentLast = String(parentLastName || "").trim();
+            const parentFullName =
+              `${cleanParentFirst} ${cleanParentLast === "." ? "" : cleanParentLast}`.trim() ||
+              String(parentName || "Parent").trim();
+            const finalGender = gender ? String(gender).trim() : null;
+            const finalBatch = batch ? String(batch).trim() : null;
+            const finalClassId = classId || (rawClassStr ? resolveClass(rawClassStr, allDbClasses)?.id : null) || null;
 
             let accountToPushParent: { role: string; identifier: string; name: string } | null = null;
             let accountToPushStudent: { role: string; identifier: string; name: string } | null = null;
@@ -1535,6 +1610,9 @@ export async function executeImportTransaction(
                     password: hashedPass,
                     role: "PARENT",
                     status: "ACTIVE",
+                    alternateEmail: cleanAltEmail && cleanAltEmail !== cleanParentEmail ? cleanAltEmail : null,
+                    googleEmail: cleanGoogleEmail,
+                    googleEmailVerified: googleVerified,
                     parent: {
                       create: {
                         phone: parentPhone ? String(parentPhone).trim() : null,
@@ -1549,7 +1627,7 @@ export async function executeImportTransaction(
                 parentId = parentUser.parent!.id;
                 accountToPushParent = {
                   role: "PARENT",
-                  identifier: cleanParentEmail,
+                  identifier: cleanAltEmail ? `${cleanAltEmail} (${cleanParentEmail})` : cleanParentEmail,
                   name: parentFullName
                 };
               } else {
@@ -1562,6 +1640,17 @@ export async function executeImportTransaction(
                   parentUser.role !== "ADMIN"
                 ) {
                   throw new Error(`User with email '${cleanParentEmail}' exists but has role '${parentUser.role}'.`);
+                }
+
+                // Backfill missing Google / Alternate ID if helpful
+                if ((cleanGoogleEmail && !parentUser.googleEmail) || (cleanAltEmail && !parentUser.alternateEmail)) {
+                  await tx.user.update({
+                    where: { id: parentUser.id },
+                    data: {
+                      ...(cleanGoogleEmail && !parentUser.googleEmail ? { googleEmail: cleanGoogleEmail, googleEmailVerified: googleVerified } : {}),
+                      ...(cleanAltEmail && !parentUser.alternateEmail ? { alternateEmail: cleanAltEmail } : {}),
+                    }
+                  });
                 }
 
                 if (!parentUser.parent) {
@@ -1579,14 +1668,16 @@ export async function executeImportTransaction(
 
               await tx.student.create({
                 data: {
-                  firstName: String(studentFirstName).trim(),
-                  lastName: String(studentLastName || ".").trim(),
+                  firstName: finalFirst,
+                  lastName: finalLast,
                   rollNumber: rollStr,
                   admissionNo: admStr,
+                  gender: finalGender,
+                  batch: finalBatch,
                   dateOfBirth: dobDate,
                   residenceType: resType,
                   address: parentAddress ? String(parentAddress).trim() : null,
-                  classId: classId || null,
+                  classId: finalClassId,
                   isActive: true,
                   parents: {
                     create: {

@@ -16,6 +16,20 @@ export interface TargetFieldDef {
 
 export const TEACHER_TARGET_FIELDS: TargetFieldDef[] = [
   {
+    key: "firstName",
+    label: "First Name",
+    required: false,
+    description: "Teacher first name (if split)",
+    aliases: ["first name", "firstname", "teacher first name"],
+  },
+  {
+    key: "lastName",
+    label: "Last Name",
+    required: false,
+    description: "Teacher last name (if split)",
+    aliases: ["last name", "lastname", "surname", "teacher last name"],
+  },
+  {
     key: "name",
     label: "Teacher Full Name",
     required: true,
@@ -126,6 +140,20 @@ export const TEACHER_TARGET_FIELDS: TargetFieldDef[] = [
       "initial password",
       "pwd",
     ],
+  },
+  {
+    key: "dateOfBirth",
+    label: "Date of Birth",
+    required: false,
+    description: "Teacher DOB (YYYY-MM-DD or DD/MM/YYYY)",
+    aliases: ["date of birth", "dob", "birth date", "teacher dob", "dateofbirth"],
+  },
+  {
+    key: "joiningDate",
+    label: "Joining Date",
+    required: false,
+    description: "Joining date (YYYY-MM-DD)",
+    aliases: ["joining date", "joiningdate", "date of joining", "doj"],
   },
   {
     key: "googleEmail",

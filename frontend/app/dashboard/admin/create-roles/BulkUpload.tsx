@@ -56,6 +56,7 @@ export default function BulkUpload({
   // Upload & Scan state
   const [file, setFile] = useState<File | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [autoFixEnabled, setAutoFixEnabled] = useState(true);
   const [scanResult, setScanResult] = useState<ExcelScanResult | null>(null);
   const [generalError, setGeneralError] = useState<string | null>(null);
 
@@ -181,13 +182,14 @@ export default function BulkUpload({
     performScan(selectedFile);
   };
 
-  const performScan = (targetFile: File) => {
+  const performScan = (targetFile: File, useAutoFix: boolean = autoFixEnabled) => {
     startTransition(async () => {
       setGeneralError(null);
       setScanResult(null);
 
       const formData = new FormData();
       formData.append("file", targetFile);
+      formData.append("autoFix", String(useAutoFix));
 
       const res = await scanExcelFileAction(formData, type);
       if (!res.success) {
@@ -204,7 +206,7 @@ export default function BulkUpload({
     if (!scanResult) return;
     startTransition(async () => {
       const rawRows = scanResult.rows.map(r => r.data);
-      const res = await revalidateExcelRowsAction(rawRows, type);
+      const res = await revalidateExcelRowsAction(rawRows, type, { autoFix: autoFixEnabled });
       if (res.success && res.result) {
         setScanResult(res.result);
       } else {
@@ -268,8 +270,8 @@ export default function BulkUpload({
       }
     }
 
-    // Default joining date to today (Asia/Kolkata date format)
-    if (!initialData.joiningDate) {
+    // Default joining date to today (Asia/Kolkata date format) for Teachers only
+    if (type === "teacher" && !initialData.joiningDate) {
       try {
         const istDate = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date());
         initialData.joiningDate = istDate;
@@ -352,8 +354,12 @@ export default function BulkUpload({
             updatedData[sug.field] = sug.newValue;
             if (sug.field === "userId") {
               updatedData.email = sug.newValue;
+              if (type === "student") updatedData.parentEmail = sug.newValue;
             }
             if (sug.field === "email") {
+              updatedData.userId = sug.newValue;
+            }
+            if (sug.field === "parentEmail") {
               updatedData.userId = sug.newValue;
             }
           } else if (sug.actionType === "CLEAR_FIELD" && sug.field) {
@@ -363,15 +369,63 @@ export default function BulkUpload({
               updatedData.isClassTeacher = false;
             }
           } else if (sug.actionType === "GENERATE_PASSWORD") {
-            updatedData.password = sug.newValue;
+            if (type === "student") {
+              updatedData.parentPassword = sug.newValue;
+            } else {
+              updatedData.password = sug.newValue;
+            }
           }
           return updatedData;
         });
       }
 
-      const res = await revalidateExcelRowsAction(updatedRows, type);
+      const res = await revalidateExcelRowsAction(updatedRows, type, { autoFix: false });
       if (res.success && res.result) {
         setScanResult(res.result);
+      }
+    });
+  };
+
+  // Auto-Fix All fixable issues across the sheet (phones, residence, missing login ID, weak passwords, duplicate emails)
+  const handleAutoFixAllMistakes = () => {
+    if (!scanResult) return;
+    startTransition(async () => {
+      const updatedRows = scanResult.rows.map(r => {
+        const updated = { ...r.data };
+        const suggestions = (r.suggestions || []) as any[];
+
+        // Prefer SET_FIELD suggestion over CLEAR_FIELD for the same field
+        const handledFields = new Set<string>();
+        for (const sug of suggestions) {
+          if (sug.actionType === "SET_FIELD" && sug.field && !handledFields.has(sug.field)) {
+            updated[sug.field] = sug.newValue;
+            handledFields.add(sug.field);
+            if (sug.field === "userId") updated.email = sug.newValue;
+            if (sug.field === "parentEmail") updated.userId = sug.newValue;
+          }
+        }
+        for (const sug of suggestions) {
+          if (sug.actionType === "CLEAR_FIELD" && sug.field === "parentPhone" && !handledFields.has("parentPhone")) {
+            updated.parentPhone = "";
+            handledFields.add("parentPhone");
+          }
+          if (sug.actionType === "GENERATE_PASSWORD" && !handledFields.has(sug.field || "password")) {
+            if (type === "student") {
+              updated.parentPassword = sug.newValue;
+            } else {
+              updated.password = sug.newValue;
+            }
+            handledFields.add(sug.field || "password");
+          }
+        }
+        return updated;
+      });
+
+      const res = await revalidateExcelRowsAction(updatedRows, type, { autoFix: true });
+      if (res.success && res.result) {
+        setScanResult(res.result);
+      } else {
+        setGeneralError(res.error || "Auto-fix failed.");
       }
     });
   };
@@ -530,7 +584,13 @@ export default function BulkUpload({
         r.data.studentLastName,
         r.data.studentRollNo,
         r.data.admissionNo,
+        r.data.parentName,
         r.data.parentEmail,
+        r.data.parentPhone,
+        r.data.userId,
+        r.data.googleEmail,
+        r.data.classNameResolved,
+        r.data.batch,
         r.data.firstName,
         r.data.lastName,
         r.data.email
@@ -704,6 +764,56 @@ export default function BulkUpload({
                   <Download size={16} /> Download Template (.xlsx)
                 </a>
               </div>
+            </div>
+
+            {/* Auto-Fix Excel Mistakes Option Banner */}
+            <div style={{
+              display: "flex",
+              flexWrap: "wrap",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: "0.75rem",
+              padding: "0.85rem 1.25rem",
+              backgroundColor: autoFixEnabled ? "rgba(16, 185, 129, 0.08)" : "rgba(107, 114, 128, 0.06)",
+              border: `1px solid ${autoFixEnabled ? "rgba(16, 185, 129, 0.3)" : "var(--border-color)"}`,
+              borderRadius: "10px",
+              marginBottom: "1.5rem"
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.65rem" }}>
+                <Wand2 size={18} color={autoFixEnabled ? "#10b981" : "var(--text-secondary)"} />
+                <div>
+                  <div style={{ fontSize: "0.875rem", fontWeight: 700, color: "var(--foreground)" }}>
+                    Auto-Fix Excel Mistakes {autoFixEnabled ? "Enabled" : "Disabled"}
+                  </div>
+                  <div style={{ fontSize: "0.775rem", color: "var(--text-secondary)" }}>
+                    Automatically repairs gender casing, Hostel/Dayscholar formats, User ID/Google Mail mapping, overlong mobile numbers, and auto-creates missing classes.
+                  </div>
+                </div>
+              </div>
+              <label style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "0.5rem",
+                cursor: "pointer",
+                fontSize: "0.8125rem",
+                fontWeight: 700,
+                color: autoFixEnabled ? "#10b981" : "var(--text-secondary)",
+                userSelect: "none"
+              }}>
+                <input
+                  type="checkbox"
+                  checked={autoFixEnabled}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    setAutoFixEnabled(checked);
+                    if (file) {
+                      performScan(file, checked);
+                    }
+                  }}
+                  style={{ width: "1rem", height: "1rem", accentColor: "#10b981", cursor: "pointer" }}
+                />
+                <span>{autoFixEnabled ? "Auto-Fix ON" : "Enable Auto-Fix"}</span>
+              </label>
             </div>
 
             {/* General Error Notification */}
@@ -1210,7 +1320,54 @@ export default function BulkUpload({
                   </div>
                 </div>
 
-                {/* ⚡ Auto-Resolve Duplicate Emails Banner */}
+                {/* ⚡ Universal Auto-Fix Banner for Any Fixable Issues */}
+                {scanResult.rows.some(r => !r.isSampleRow && (r.suggestions?.some((s: any) => s.actionType !== "SKIP_ROW") || r.status === "NEEDS_CORRECTION")) && (
+                  <div style={{
+                    padding: "0.75rem 1rem",
+                    borderRadius: "8px",
+                    background: "linear-gradient(135deg, rgba(16, 185, 129, 0.14), rgba(59, 130, 246, 0.14))",
+                    border: "1px solid rgba(16, 185, 129, 0.35)",
+                    marginBottom: "1rem",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    flexWrap: "wrap",
+                    gap: "0.5rem"
+                  }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                      <Zap size={18} color="#10b981" />
+                      <span style={{ fontSize: "0.85rem", fontWeight: 600, color: "#10b981" }}>
+                        Auto-fix suggestions available for{" "}
+                        {scanResult.rows.filter(r => !r.isSampleRow && r.suggestions?.some((s: any) => s.actionType !== "SKIP_ROW")).length}{" "}
+                        row(s) (e.g. recoverable phones, weak passwords, missing IDs, duplicate emails).
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleAutoFixAllMistakes}
+                      disabled={isPending}
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "0.35rem",
+                        padding: "0.45rem 0.9rem",
+                        borderRadius: "6px",
+                        background: "linear-gradient(135deg, #10b981, #059669)",
+                        color: "#ffffff",
+                        border: "none",
+                        fontWeight: 700,
+                        fontSize: "0.8rem",
+                        cursor: isPending ? "not-allowed" : "pointer",
+                        boxShadow: "0 2px 6px rgba(16, 185, 129, 0.35)"
+                      }}
+                    >
+                      <Zap size={14} />
+                      <span>{isPending ? "Auto-Fixing..." : "Auto-Fix All Mistakes"}</span>
+                    </button>
+                  </div>
+                )}
+
+                {/* ⚡ Auto-Resolve Duplicate Emails Banner (Teachers) */}
                 {type === "teacher" && scanResult.rows.some(r => {
                   const hasEmailDup = Boolean(
                     r.fieldErrors?.email ||
@@ -1396,10 +1553,30 @@ export default function BulkUpload({
                               <td style={{ padding: "0.75rem 1rem" }}>
                                 {type === "student" ? (
                                   <div>
-                                    <div style={{ fontWeight: 600 }}>{r.data.studentFirstName} {r.data.studentLastName}</div>
-                                    <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)" }}>
+                                    <div style={{ fontWeight: 600, display: "flex", alignItems: "center", gap: "0.4rem", flexWrap: "wrap" }}>
+                                      <span>{r.data.studentFirstName} {r.data.studentLastName === "." ? "" : r.data.studentLastName}</span>
+                                      {r.data.gender && (
+                                        <span style={{
+                                          display: "inline-block",
+                                          padding: "1px 6px",
+                                          borderRadius: "4px",
+                                          backgroundColor: String(r.data.gender).toLowerCase() === "female" ? "rgba(236, 72, 153, 0.12)" : "rgba(59, 130, 246, 0.12)",
+                                          color: String(r.data.gender).toLowerCase() === "female" ? "#db2777" : "#2563eb",
+                                          fontWeight: 700,
+                                          fontSize: "0.68rem"
+                                        }}>
+                                          {r.data.gender}
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)", marginTop: "2px" }}>
                                       Roll: <strong>{r.data.studentRollNo || "Missing"}</strong> • Adm: {r.data.admissionNo || "N/A"}
                                     </div>
+                                    {r.data.batch && (
+                                      <div style={{ fontSize: "0.72rem", color: "var(--text-secondary)", marginTop: "1px" }}>
+                                        Batch: <strong>{r.data.batch}</strong>
+                                      </div>
+                                    )}
                                   </div>
                                 ) : type === "teacher" ? (
                                   <div>
@@ -1432,10 +1609,23 @@ export default function BulkUpload({
                               <td style={{ padding: "0.75rem 1rem" }}>
                                 {type === "student" ? (
                                   <div>
-                                    <div style={{ fontWeight: 500 }}>{r.data.parentFirstName} {r.data.parentLastName}</div>
-                                    <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)" }}>
-                                      {r.data.parentEmail || "Missing email"} {r.data.isExistingParent && " (Existing Parent)"}
+                                    <div style={{ fontWeight: 600 }}>
+                                      {r.data.parentFirstName || "Missing parent"}{" "}
+                                      {r.data.parentLastName === "." ? "" : r.data.parentLastName}
                                     </div>
+                                    <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)", marginTop: "2px" }}>
+                                      {r.data.parentPhone ? `Phone: ${r.data.parentPhone}` : "No phone"}
+                                    </div>
+                                    <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)" }}>
+                                      {r.data.parentEmail || "Missing email"}{r.data.isExistingParent && " (Existing Parent)"}
+                                    </div>
+                                    {(r.data.alternateEmail || (r.data.googleEmail && r.data.googleEmail !== r.data.parentEmail)) && (
+                                      <div style={{ fontSize: "0.72rem", color: "var(--primary, #6366f1)", marginTop: "1px" }}>
+                                        {r.data.alternateEmail ? `ID: ${r.data.alternateEmail}` : ""}
+                                        {r.data.alternateEmail && r.data.googleEmail && r.data.googleEmail !== r.data.parentEmail ? " • " : ""}
+                                        {r.data.googleEmail && r.data.googleEmail !== r.data.parentEmail ? `Google: ${r.data.googleEmail}` : ""}
+                                      </div>
+                                    )}
                                   </div>
                                 ) : type === "teacher" ? (
                                   <div>
@@ -1459,10 +1649,29 @@ export default function BulkUpload({
                               <td style={{ padding: "0.75rem 1rem" }}>
                                 {type === "student" ? (
                                   <div>
-                                    <div style={{ fontWeight: 500 }}>{r.data.classNameResolved || r.data.class || "Unassigned"}</div>
-                                    <div style={{ fontSize: "0.75rem", color: r.fieldErrors.residenceType ? "#ef4444" : "var(--text-secondary)" }}>
+                                    <div style={{ fontWeight: 500, display: "flex", alignItems: "center", gap: "0.35rem", flexWrap: "wrap" }}>
+                                      <span>{r.data.classNameResolved || r.data.class || "Unassigned"}</span>
+                                      {r.data.willAutoCreateClass && (
+                                        <span style={{
+                                          fontSize: "0.66rem",
+                                          padding: "1px 5px",
+                                          borderRadius: "4px",
+                                          backgroundColor: "rgba(59, 130, 246, 0.12)",
+                                          color: "#3b82f6",
+                                          fontWeight: 700
+                                        }}>
+                                          Auto-create
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div style={{ fontSize: "0.75rem", color: r.fieldErrors.residenceType ? "#ef4444" : "var(--text-secondary)", marginTop: "2px" }}>
                                       Type: <strong>{r.data.residenceType || "DAYSCHOLAR"}</strong>
                                     </div>
+                                    {r.data.parentAddress && (
+                                      <div style={{ fontSize: "0.7rem", color: "var(--text-secondary)", marginTop: "2px", maxWidth: "200px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} title={r.data.parentAddress}>
+                                        {r.data.parentAddress}
+                                      </div>
+                                    )}
                                     {r.fieldErrors.residenceType && (
                                       <div style={{ display: "flex", alignItems: "center", gap: "0.3rem", marginTop: "0.35rem" }}>
                                         <button
@@ -1524,7 +1733,53 @@ export default function BulkUpload({
                               {/* Validation Issues */}
                               <td style={{ padding: "0.75rem 1rem" }}>
                                 {isReady && (
-                                  <span style={{ color: "#10b981", fontSize: "0.8125rem" }}>All fields valid & verified</span>
+                                  <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}>
+                                    <span style={{ color: "#10b981", fontSize: "0.8125rem", fontWeight: 600 }}>All fields valid & verified</span>
+                                    {r.warnings && Object.keys(r.warnings).length > 0 && (
+                                      <div style={{ display: "flex", flexWrap: "wrap", gap: "0.25rem" }}>
+                                        {Object.entries(r.warnings)
+                                          .filter(([key]) => key !== "class")
+                                          .map(([key, msg]) => (
+                                            <span key={key} style={{
+                                              display: "inline-block",
+                                              padding: "0.15rem 0.4rem",
+                                              borderRadius: "4px",
+                                              backgroundColor: "rgba(245, 158, 11, 0.1)",
+                                              color: "#f59e0b",
+                                              fontSize: "0.72rem"
+                                            }}>
+                                              {msg}
+                                            </span>
+                                          ))}
+                                      </div>
+                                    )}
+                                    {r.suggestions && r.suggestions.length > 0 && (
+                                      <div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem", marginTop: "0.15rem" }}>
+                                        {r.suggestions.map((sug: any, sIdx: number) => (
+                                          <button
+                                            key={`sug-valid-${sIdx}`}
+                                            type="button"
+                                            onClick={() => handleApplySuggestion(r.excelRowNumber, sug)}
+                                            style={{
+                                              display: "inline-flex",
+                                              alignItems: "center",
+                                              gap: "0.25rem",
+                                              padding: "0.18rem 0.45rem",
+                                              borderRadius: "6px",
+                                              backgroundColor: "rgba(16, 185, 129, 0.1)",
+                                              border: "1px solid rgba(16, 185, 129, 0.25)",
+                                              color: "#10b981",
+                                              fontSize: "0.7rem",
+                                              fontWeight: 600,
+                                              cursor: "pointer"
+                                            }}
+                                          >
+                                            <Wand2 size={10} /> {sug.label}
+                                          </button>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
                                 )}
                                 {isSample && (
                                   <span style={{ color: "#6b7280", fontSize: "0.8125rem" }}>Template demonstration row (skipped)</span>
@@ -2190,7 +2445,51 @@ export default function BulkUpload({
 
                     <div>
                       <label style={{ display: "block", fontSize: "0.8125rem", fontWeight: 600, marginBottom: "0.25rem" }}>
-                        Date of Birth (YYYY-MM-DD)
+                        Gender
+                      </label>
+                      <select
+                        value={
+                          String(editFormData.gender || "").toUpperCase() === "FEMALE" ? "Female" :
+                          String(editFormData.gender || "").toUpperCase() === "MALE" ? "Male" : "Other"
+                        }
+                        onChange={(e) => setEditFormData({ ...editFormData, gender: e.target.value })}
+                        style={{
+                          width: "100%",
+                          padding: "0.5rem 0.75rem",
+                          borderRadius: "8px",
+                          border: "1px solid var(--border-color)",
+                          background: "var(--card-bg)",
+                          color: "var(--foreground)"
+                        }}
+                      >
+                        <option value="Male">Male</option>
+                        <option value="Female">Female</option>
+                        <option value="Other">Other</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label style={{ display: "block", fontSize: "0.8125rem", fontWeight: 600, marginBottom: "0.25rem" }}>
+                        Batch (e.g. 2026-2027)
+                      </label>
+                      <input
+                        type="text"
+                        value={editFormData.batch || ""}
+                        onChange={(e) => setEditFormData({ ...editFormData, batch: e.target.value })}
+                        placeholder="e.g. 2026-2027"
+                        style={{
+                          width: "100%",
+                          padding: "0.5rem 0.75rem",
+                          borderRadius: "8px",
+                          border: "1px solid var(--border-color)",
+                          background: "transparent"
+                        }}
+                      />
+                    </div>
+
+                    <div>
+                      <label style={{ display: "block", fontSize: "0.8125rem", fontWeight: 600, marginBottom: "0.25rem" }}>
+                        Date of Birth (Optional, YYYY-MM-DD)
                       </label>
                       <input
                         type="date"
@@ -2212,9 +2511,19 @@ export default function BulkUpload({
                         Assign Class *
                       </label>
                       <select
-                        value={editFormData.classId || ""}
+                        value={editFormData.classId || (editFormData.class ? `__AUTO__${editFormData.class}` : "")}
                         onChange={(e) => {
                           const cId = e.target.value;
+                          if (cId.startsWith("__AUTO__")) {
+                            const rawCls = cId.replace("__AUTO__", "");
+                            setEditFormData({
+                              ...editFormData,
+                              classId: "",
+                              class: rawCls,
+                              classNameResolved: editFormData.classNameResolved || rawCls
+                            });
+                            return;
+                          }
                           const selected = activeClasses.find(c => c.id === cId);
                           setEditFormData({
                             ...editFormData,
@@ -2228,10 +2537,16 @@ export default function BulkUpload({
                           padding: "0.5rem 0.75rem",
                           borderRadius: "8px",
                           border: `1px solid ${editRowErrors.class ? "#ef4444" : "var(--border-color)"}`,
-                          background: "transparent"
+                          background: "var(--card-bg)",
+                          color: "var(--foreground)"
                         }}
                       >
                         <option value="">-- Select Class --</option>
+                        {!editFormData.classId && editFormData.class && (
+                          <option value={`__AUTO__${editFormData.class}`}>
+                            {editFormData.classNameResolved || editFormData.class} (Auto-create on import)
+                          </option>
+                        )}
                         {activeClasses.map(c => (
                           <option key={c.id} value={c.id}>{c.name} - Section {c.section}</option>
                         ))}
@@ -2324,12 +2639,12 @@ export default function BulkUpload({
 
                     <div>
                       <label style={{ display: "block", fontSize: "0.8125rem", fontWeight: 600, marginBottom: "0.25rem" }}>
-                        Parent Email *
+                        Parent Login Email / User ID *
                       </label>
                       <input
-                        type="email"
+                        type="text"
                         value={editFormData.parentEmail || ""}
-                        onChange={(e) => setEditFormData({ ...editFormData, parentEmail: e.target.value })}
+                        onChange={(e) => setEditFormData({ ...editFormData, parentEmail: e.target.value, userId: e.target.value })}
                         style={{
                           width: "100%",
                           padding: "0.5rem 0.75rem",
@@ -2339,6 +2654,45 @@ export default function BulkUpload({
                         }}
                       />
                       {editRowErrors.parentEmail && <span style={{ color: "#ef4444", fontSize: "0.75rem" }}>{editRowErrors.parentEmail}</span>}
+                    </div>
+
+                    <div>
+                      <label style={{ display: "block", fontSize: "0.8125rem", fontWeight: 600, marginBottom: "0.25rem" }}>
+                        Sign In with Google Mail ID
+                      </label>
+                      <input
+                        type="email"
+                        value={editFormData.googleEmail || ""}
+                        onChange={(e) => setEditFormData({ ...editFormData, googleEmail: e.target.value })}
+                        placeholder="e.g. parent@gmail.com"
+                        style={{
+                          width: "100%",
+                          padding: "0.5rem 0.75rem",
+                          borderRadius: "8px",
+                          border: `1px solid ${editRowErrors.googleEmail ? "#ef4444" : "var(--border-color)"}`,
+                          background: "transparent"
+                        }}
+                      />
+                      {editRowErrors.googleEmail && <span style={{ color: "#ef4444", fontSize: "0.75rem" }}>{editRowErrors.googleEmail}</span>}
+                    </div>
+
+                    <div>
+                      <label style={{ display: "block", fontSize: "0.8125rem", fontWeight: 600, marginBottom: "0.25rem" }}>
+                        Parent Password
+                      </label>
+                      <input
+                        type="text"
+                        value={editFormData.parentPassword || ""}
+                        onChange={(e) => setEditFormData({ ...editFormData, parentPassword: e.target.value })}
+                        placeholder="Defaults to Parent@123"
+                        style={{
+                          width: "100%",
+                          padding: "0.5rem 0.75rem",
+                          borderRadius: "8px",
+                          border: "1px solid var(--border-color)",
+                          background: "transparent"
+                        }}
+                      />
                     </div>
 
                     <div>
@@ -2358,6 +2712,25 @@ export default function BulkUpload({
                         }}
                       />
                       {editRowErrors.parentPhone && <span style={{ color: "#ef4444", fontSize: "0.75rem" }}>{editRowErrors.parentPhone}</span>}
+                    </div>
+
+                    <div style={{ gridColumn: "1 / -1" }}>
+                      <label style={{ display: "block", fontSize: "0.8125rem", fontWeight: 600, marginBottom: "0.25rem" }}>
+                        Address
+                      </label>
+                      <input
+                        type="text"
+                        value={editFormData.parentAddress || ""}
+                        onChange={(e) => setEditFormData({ ...editFormData, parentAddress: e.target.value })}
+                        placeholder="Residential address"
+                        style={{
+                          width: "100%",
+                          padding: "0.5rem 0.75rem",
+                          borderRadius: "8px",
+                          border: "1px solid var(--border-color)",
+                          background: "transparent"
+                        }}
+                      />
                     </div>
                   </div>
                 </>

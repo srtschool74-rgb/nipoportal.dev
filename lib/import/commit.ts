@@ -12,6 +12,7 @@ import * as XLSX from "xlsx";
 import { prisma } from "@/backend/db/prisma";
 import { BatchImportResult, ImportRole, RowValidationResult } from "./types";
 import { sanitizeForSpreadsheetExport } from "./coerce";
+import { parseClassTeacher, resolveClassSmart } from "./normalizers";
 
 /**
  * Commits a batch of validated rows to the database.
@@ -164,25 +165,43 @@ async function commitSingleTeacher(data: Record<string, any>) {
 async function commitSingleStudent(data: Record<string, any>) {
   const {
     rollNo,
+    studentRollNo,
+    admissionNo,
     name,
     firstName,
+    studentFirstName,
     lastName,
+    studentLastName,
     gender,
     dob,
+    studentDob,
+    batch,
     residenceType,
     class: targetClassName,
+    classId: explicitClassId,
     parentName,
     parentFirstName,
     parentLastName,
     parentPhone,
+    parentAddress,
     parentEmail,
+    alternateEmail,
+    googleEmail,
     parentPassword,
   } = data;
 
-  const studentFullName = `${firstName} ${lastName || ""}`.trim() || name;
-  const parentFullName = `${parentFirstName} ${parentLastName || ""}`.trim() || parentName;
+  const finalRoll = String(rollNo || studentRollNo || "").trim();
+  const finalFirst = String(firstName || studentFirstName || "").trim();
+  const finalLast = String(lastName || studentLastName || ".").trim() || ".";
+  const finalParentFirst = String(parentFirstName || "").trim();
+  const finalParentLast = String(parentLastName || "").trim();
+  const parentFullName = `${finalParentFirst} ${finalParentLast === "." ? "" : finalParentLast}`.trim() || parentName || "Parent";
   const cleanParentEmail = String(parentEmail).trim().toLowerCase();
+  const cleanAltEmail = alternateEmail ? String(alternateEmail).trim().toLowerCase() : null;
+  const cleanGoogleEmail = googleEmail ? String(googleEmail).trim().toLowerCase() : null;
+  const googleVerified = Boolean(cleanGoogleEmail && (cleanGoogleEmail.endsWith("@gmail.com") || cleanGoogleEmail.endsWith("@googlemail.com")));
   const hashedParentPassword = await hash(String(parentPassword || "Parent@123"), 10);
+  const rawDobStr = studentDob || dob;
 
   return await prisma.$transaction(async (tx) => {
     // 1. Find or create parent user
@@ -199,6 +218,9 @@ async function commitSingleStudent(data: Record<string, any>) {
           password: hashedParentPassword,
           role: "PARENT",
           status: "ACTIVE",
+          alternateEmail: cleanAltEmail && cleanAltEmail !== cleanParentEmail ? cleanAltEmail : null,
+          googleEmail: cleanGoogleEmail,
+          googleEmailVerified: googleVerified,
           notificationsEnabled: true,
         },
         include: { parent: true },
@@ -216,26 +238,44 @@ async function commitSingleStudent(data: Record<string, any>) {
       });
     }
 
-    // 2. Resolve Class
-    let classId = "";
-    if (targetClassName) {
-      const foundClass = await tx.class.findFirst({
-        where: { name: { contains: targetClassName, mode: "insensitive" } },
+    // 2. Resolve or auto-create Class
+    let resolvedClassId = explicitClassId || "";
+    if (!resolvedClassId && targetClassName) {
+      const activeClasses = await tx.class.findMany({
+        where: { isActive: true },
+        select: { id: true, name: true, section: true },
       });
-      if (foundClass) classId = foundClass.id;
+      const res = resolveClassSmart(targetClassName, activeClasses);
+      if (res.matchedClass) {
+        resolvedClassId = res.matchedClass.id;
+      } else {
+        const parsed = parseClassTeacher(targetClassName);
+        if (parsed.className && parsed.section) {
+          const created = await tx.class.create({
+            data: {
+              name: parsed.className,
+              section: parsed.section,
+              isActive: true,
+            },
+          });
+          resolvedClassId = created.id;
+        }
+      }
     }
 
     // 3. Create Student
     const student = await tx.student.create({
       data: {
-        rollNumber: rollNo,
-        admissionNo: `ADM${rollNo}`,
-        firstName,
-        lastName: lastName || "",
-        gender: gender || "OTHER",
-        dateOfBirth: dob ? new Date(dob) : null,
+        rollNumber: finalRoll,
+        admissionNo: admissionNo || `ADM${finalRoll}`,
+        firstName: finalFirst || name,
+        lastName: finalLast,
+        gender: gender || "Other",
+        batch: batch ? String(batch).trim() : null,
+        address: parentAddress ? String(parentAddress).trim() : null,
+        dateOfBirth: rawDobStr ? new Date(rawDobStr) : null,
         residenceType: residenceType === "HOSTEL" ? "HOSTEL" : "DAYSCHOLAR",
-        classId: classId || (await tx.class.findFirst())?.id || "",
+        classId: resolvedClassId || null,
         isActive: true,
       },
     });

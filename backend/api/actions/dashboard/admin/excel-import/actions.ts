@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/backend/db/prisma";
+import { revalidateImportRows, ImportRole } from "@/lib/import";
 import {
   parseAndScanWorkbook,
   validateAndCorrelateBatch,
@@ -67,11 +68,13 @@ export async function scanExcelFileAction(
   try {
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
+    const autoFixRaw = formData.get("autoFix");
+    const autoFix = autoFixRaw !== "false";
     const targetType: ImportType = expectedType === "student" 
       ? "STUDENT_PARENT" 
       : (expectedType === "teacher" ? "TEACHER" : "ADMIN");
 
-    const scanResult = await parseAndScanWorkbook(buffer, targetType);
+    const scanResult = await parseAndScanWorkbook(buffer, targetType, { autoFix });
 
     if (!scanResult.isValidWorkbook && scanResult.fileError) {
       return { success: false, error: scanResult.fileError, result: scanResult };
@@ -91,7 +94,8 @@ export async function scanExcelFileAction(
  */
 export async function revalidateExcelRowsAction(
   rows: Record<string, any>[],
-  expectedType: "student" | "teacher" | "admin"
+  expectedType: "student" | "teacher" | "admin",
+  options?: { autoFix?: boolean }
 ): Promise<{ success: boolean; result?: ExcelScanResult; error?: string }> {
   const auth = await verifyAdminAuth();
   if (!auth.authorized) {
@@ -107,6 +111,44 @@ export async function revalidateExcelRowsAction(
       select: { id: true, name: true, section: true },
       orderBy: [{ name: "asc" }, { section: "asc" }]
     });
+
+    if (targetType === "STUDENT_PARENT" || targetType === "TEACHER") {
+      const role: ImportRole = targetType === "TEACHER" ? "TEACHER" : "STUDENT";
+      const validatedRows = await revalidateImportRows({
+        role,
+        rows,
+        checkDb: true,
+        availableClasses,
+        autoFix: options?.autoFix ?? false,
+      });
+
+      const validCount = validatedRows.filter(r => r.status === "VALID").length;
+      const errorCount = validatedRows.filter(r => r.status === "NEEDS_CORRECTION").length;
+      const dupCount = validatedRows.filter(r => r.status === "DUPLICATE_IN_FILE").length;
+      const confCount = validatedRows.filter(r => r.status === "CONFLICT_DB").length;
+      const sampleCount = validatedRows.filter(r => r.status === "SAMPLE_ROW").length;
+      const readyCount = validatedRows.filter(r => r.isReadyToImport).length;
+
+      return {
+        success: true,
+        result: {
+          isValidWorkbook: true,
+          detectedTemplate: targetType,
+          headersFound: [],
+          missingHeaders: [],
+          unexpectedHeaders: [],
+          totalRows: validatedRows.length,
+          validRowsCount: validCount,
+          errorRowsCount: errorCount,
+          duplicateRowsCount: dupCount,
+          conflictRowsCount: confCount,
+          sampleRowsCount: sampleCount,
+          readyToImportCount: readyCount,
+          rows: validatedRows as any,
+          availableClasses,
+        },
+      };
+    }
 
     const result = await validateAndCorrelateBatch(targetType, rows, availableClasses);
     return { success: true, result };
@@ -154,6 +196,7 @@ export async function commitExcelImportAction(
       revalidatePath("/dashboard/admin/students");
       revalidatePath("/dashboard/admin/parents");
       revalidatePath("/dashboard/admin/teachers");
+      revalidatePath("/dashboard/admin/classes");
       revalidatePath("/dashboard/admin/create-roles/admin");
       revalidatePath("/dashboard/admin/excel-import");
     } catch {

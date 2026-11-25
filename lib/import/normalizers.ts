@@ -141,6 +141,58 @@ export function isValidIndianPhone(phone: string): boolean {
 }
 
 /**
+ * Attempts to recover a valid 10-digit Indian mobile number from an overlong digit string
+ * (e.g. "699696696696996969" -> "6996966966"). Returns null if no valid 10-digit number can be recovered.
+ */
+export function tryExtractIndianMobile(rawPhone: string): string | null {
+  if (!rawPhone) return null;
+  const digits = rawPhone.replace(/\D/g, "");
+  if (digits.length === 10) {
+    return /^[6-9]\d{9}$/.test(digits) ? digits : null;
+  }
+  if (digits.length === 11 && digits.startsWith("0")) {
+    const candidate = digits.slice(1);
+    return /^[6-9]\d{9}$/.test(candidate) ? candidate : null;
+  }
+  if (digits.length === 12 && digits.startsWith("91")) {
+    const candidate = digits.slice(2);
+    return /^[6-9]\d{9}$/.test(candidate) ? candidate : null;
+  }
+  if (digits.length > 10) {
+    // Prefer leading 10 digits if valid Indian mobile
+    const head = digits.slice(0, 10);
+    if (/^[6-9]\d{9}$/.test(head)) return head;
+    // Otherwise scan for first 10-digit Indian mobile substring
+    const match = digits.match(/[6-9]\d{9}/);
+    if (match) return match[0];
+  }
+  return null;
+}
+
+/**
+ * Normalizes Hostel / Dayscholar residence strings.
+ * Marks unclear only when BOTH options appear together (e.g. "Hostel or Dayscholar").
+ */
+export function normalizeResidenceType(raw: string): {
+  value: "HOSTEL" | "DAYSCHOLAR";
+  unclear: boolean;
+} {
+  const upper = (raw || "").trim().toUpperCase();
+  if (!upper) return { value: "DAYSCHOLAR", unclear: false };
+
+  const hasDay = upper.includes("DAY") || upper === "D";
+  const hasHostel = upper.includes("HOSTEL") || upper === "H" || upper.includes("BOARD");
+
+  if (hasDay && hasHostel) {
+    return { value: "DAYSCHOLAR", unclear: true };
+  }
+  if (hasHostel) {
+    return { value: "HOSTEL", unclear: false };
+  }
+  return { value: "DAYSCHOLAR", unclear: false };
+}
+
+/**
  * Standardizes Gender values into "Female" | "Male" | "Other" (matching UI selects)
  */
 export function normalizeGender(rawGender: string): "Female" | "Male" | "Other" {

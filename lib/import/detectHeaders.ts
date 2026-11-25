@@ -18,6 +18,7 @@ export function normalizeHeaderToken(header: string): string {
   if (!header) return "";
   return header
     .toLowerCase()
+    .replace(/[*?!:()[\]]+/g, " ")
     .replace(/[._\-–/\\]+/g, " ")
     .replace(/\s+/g, " ")
     .trim();
@@ -104,15 +105,29 @@ export function autoMapColumns(
       // Check if any alias is an exact word boundary in the token
       // E.g. "teacher's name" or "faculty phone number"
       const match = tf.aliases.some(alias => {
-        // Guard against false positives: "name" must NOT match "class teacher"
-        if (tf.key === "name" && (token.includes("teacher") || token.includes("class"))) {
+        // Guard against false positives:
+        // "name" must NOT match "class teacher" or "parent full name"
+        if (
+          tf.key === "name" &&
+          (token.includes("teacher") ||
+            token.includes("class") ||
+            token.includes("parent") ||
+            token.includes("father") ||
+            token.includes("mother") ||
+            token.includes("guardian"))
+        ) {
           return false;
         }
         if (tf.key === "classTeacher" && !token.includes("class")) {
           return false;
         }
+        // "email" must NOT steal "Sign In with Google Mail ID" when googleEmail is a distinct target field
+        if (tf.key === "parentEmail" && token.includes("google")) {
+          return false;
+        }
 
-        const regex = new RegExp(`\\b${alias}\\b`, "i");
+        const escapedAlias = alias.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        const regex = new RegExp(`\\b${escapedAlias}\\b`, "i");
         return regex.test(token);
       });
 
