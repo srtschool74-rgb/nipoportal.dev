@@ -7,6 +7,7 @@
     "build": "prisma generate && next build --webpack",
     "start": "next start",
     "lint": "eslint",
+    "test": "vitest run",
     "postinstall": "prisma generate",
     "db:sync": "node scripts/sync-neon-to-supabase.js",
     "db:push:all": "node scripts/push-all-dbs.js",
@@ -73,7 +74,8 @@
     "eslint": "^9",
     "eslint-config-next": "16.3.4",
     "puppeteer-core": "^25.16.0",
-    "tsx": "^4.23.13"
+    "tsx": "^4.23.13",
+    "vitest": "^3.2.7"
   },
   "allowScripts": {
     "@prisma/client@5.22.0": true,

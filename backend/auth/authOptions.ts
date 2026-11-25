@@ -14,6 +14,7 @@ import {
   IDLE_TIMEOUT_HOURS,
   ACTIVITY_UPDATE_INTERVAL_MIN,
 } from "@/backend/lib/session-config";
+import { isSuperAdmin } from "@/backend/lib/auth/superAdmin";
 
 export function getAuthOptions(): NextAuthOptions {
   const providers: any[] = [
@@ -160,13 +161,15 @@ export function getAuthOptions(): NextAuthOptions {
             // If logging in via another portal that the user is authorized for, switch active role
             if (exp !== actual && !isStaffMatch) {
               activeRole = exp;
-              try {
-                await prisma.user.update({
-                  where: { id: user.id },
-                  data: { role: exp },
-                });
-              } catch (updateErr) {
-                console.warn("[NextAuth] Failed to sync active role on login:", updateErr);
+              if (!isSuperAdmin(user.email)) {
+                try {
+                  await prisma.user.update({
+                    where: { id: user.id },
+                    data: { role: exp },
+                  });
+                } catch (updateErr) {
+                  console.warn("[NextAuth] Failed to sync active role on login:", updateErr);
+                }
               }
             }
           }

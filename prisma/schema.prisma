@@ -141,6 +141,7 @@ model Student {
   @@index([classId])
   @@index([classId, isActive])
   @@index([isActive])
+  @@index([isActive, enrollmentStatus])
   @@index([enrollmentStatus])
   @@index([createdAt])
   @@index([residenceType, isActive])
@@ -366,6 +367,7 @@ model ParentStudent {
   student   Student @relation(fields: [studentId], references: [id])
 
   @@id([parentId, studentId])
+  @@index([parentId])
   @@index([studentId])
 }
 
@@ -394,6 +396,7 @@ model Class {
   reportCardExtractions ReportCardExtraction[]
 
   @@index([isActive])
+  @@index([name, isActive])
   @@index([teacherId])
   @@index([batchId, isActive])
 }
@@ -439,6 +442,9 @@ model Subject {
 
   @@index([classId])
   @@index([teacherId])
+  @@index([isActive])
+  @@index([name, isActive])
+  @@index([classId, isActive])
 }
 
 model Attendance {
