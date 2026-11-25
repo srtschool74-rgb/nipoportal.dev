@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
-import { prisma } from "@/backend/db/prisma";
+import { getUnreadNotificationStats } from "@/backend/services/stats";
 import { ServerTimer } from "@/lib/perf/serverTimer";
 
 export const dynamic = "force-dynamic";
@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
     if (!token?.id || token.isRevoked) {
       timer.logSummary(401);
       return NextResponse.json(
-        { unreadCount: 0, hasBusAlert: false, messageCount: 0, notificationCount: 0 },
+        { unreadCount: 0, hasBusAlert: false, messageCount: 0, notificationCount: 0, busAlertCount: 0 },
         {
           status: 401,
           headers: { "Server-Timing": timer.getHeaderValue() },
@@ -29,53 +29,19 @@ export async function GET(req: NextRequest) {
 
     const userId = token.id as string;
     const clearedTimeParam = req.nextUrl.searchParams.get("clearedTime");
-    const clearedFilter = clearedTimeParam && !isNaN(new Date(clearedTimeParam).getTime())
-      ? { createdAt: { gt: new Date(clearedTimeParam) } }
-      : {};
+    const parsedCleared = clearedTimeParam ? new Date(clearedTimeParam) : null;
+    const clearedAfter = parsedCleared && !isNaN(parsedCleared.getTime()) ? parsedCleared : null;
 
-    const [counts, unreadMessagesCount] = await Promise.all([
-      timer.measure("db-notif-counts", () =>
-        prisma.notification.groupBy({
-          by: ["category"],
-          where: { userId, isRead: false, ...clearedFilter },
-          _count: { _all: true },
-        })
-      ),
-      timer.measure("db-message-counts", () =>
-        prisma.message.count({
-          where: {
-            receiverId: userId,
-            isRead: false,
-            isDeleted: false,
-            ...clearedFilter,
-          },
-        })
-      ),
-    ]);
-
-    let notificationUnreadCount = 0;
-    let busAlertCount = 0;
-
-    for (const row of counts) {
-      const c = row._count._all;
-      notificationUnreadCount += c;
-      if (row.category === "BUS") {
-        busAlertCount += c;
-      }
-    }
-
-    const totalUnreadCount = notificationUnreadCount + unreadMessagesCount;
+    const stats = await timer.measure("db-unread-stats", () =>
+      getUnreadNotificationStats(userId, { clearedAfter })
+    );
 
     timer.logSummary(200, token.role as string);
 
     return NextResponse.json(
       {
         success: true,
-        unreadCount: totalUnreadCount,
-        notificationCount: notificationUnreadCount,
-        messageCount: unreadMessagesCount,
-        hasBusAlert: busAlertCount > 0,
-        busAlertCount,
+        ...stats,
       },
       {
         headers: {
@@ -88,7 +54,7 @@ export async function GET(req: NextRequest) {
     console.error("GET /api/notifications/unread-count error:", error);
     timer.logSummary(500);
     return NextResponse.json(
-      { success: false, unreadCount: 0, hasBusAlert: false, messageCount: 0, notificationCount: 0 },
+      { success: false, unreadCount: 0, hasBusAlert: false, messageCount: 0, notificationCount: 0, busAlertCount: 0 },
       {
         status: 500,
         headers: { "Server-Timing": timer.getHeaderValue() },

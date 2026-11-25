@@ -20,6 +20,7 @@ import {
   isDayScholarStudent,
 } from "@/backend/lib/transport/dayScholarHelper";
 import { parseAndValidateDob } from "@/lib/validations/dob";
+import { computeBusSeatMetrics, getTransportFleetSummary, invalidateAllStatsCaches } from "@/backend/services/stats";
 
 // Helper: resolve staff record for current session user (supports STAFF and TEACHER roles)
 async function getStaffForUser(userId: string) {
@@ -209,60 +210,26 @@ export async function getTransportOverviewAction() {
       },
     });
 
-    // 6. Aggregate summary metrics strictly from real database counts
-    const totalBuses = await prisma.bus.count({
-      where: { isActive: true },
-    });
-    const runningBuses = await prisma.bus.count({
-      where: { isActive: true, status: "RUNNING" },
-    });
-    const issuesBuses = await prisma.bus.count({
-      where: {
-        isActive: true,
-        status: { in: ["DELAYED", "MAINTENANCE", "NOT_RUNNING"] },
-      },
-    });
+    // 6. Aggregate summary metrics from single source of truth transport stats layer
+    const fleetSummary = await getTransportFleetSummary();
 
-    const totalDayScholars = await prisma.student.count({
-      where: getDayScholarWhere(),
-    });
-    const dayScholarsOnBuses = await prisma.student.count({
-      where: {
-        ...getDayScholarWhere(),
-        busAssignments: {
-          some: {
-            bus: { isActive: true },
-          },
-        },
-      },
-    });
-    const dayScholarsUnassigned = await prisma.student.count({
-      where: {
-        ...getDayScholarWhere(),
-        busAssignments: {
-          none: {
-            bus: { isActive: true },
-          },
-        },
-      },
+    const busesWithSeatMetrics = buses.map((bus) => {
+      const assigned = bus._count?.students || 0;
+      return {
+        ...bus,
+        seatMetrics: computeBusSeatMetrics(bus.capacity, assigned),
+      };
     });
 
     return {
       success: true,
       data: {
-        buses,
+        buses: busesWithSeatMetrics,
         staffList,
         classes,
         recentMessages,
         recentStatusLogs,
-        summaryMetrics: {
-          totalBuses,
-          runningBuses,
-          issuesBuses,
-          totalDayScholars,
-          dayScholarsOnBuses,
-          dayScholarsUnassigned,
-        },
+        summaryMetrics: fleetSummary,
       },
     };
   } catch (error: any) {
@@ -477,6 +444,7 @@ export async function createBusAction(rawData: any) {
     revalidatePath("/staff/my-bus");
     revalidatePath("/parent/bus");
     revalidatePath("/dashboard/parent/transport");
+    await invalidateAllStatsCaches();
 
     return { success: true, bus };
   } catch (error: any) {
@@ -570,6 +538,7 @@ export async function updateBusAction(busId: string, rawData: any) {
     revalidatePath("/staff/my-bus");
     revalidatePath("/parent/bus");
     revalidatePath("/dashboard/parent/transport");
+    await invalidateAllStatsCaches();
 
     return { success: true, bus: updated };
   } catch (error: any) {
@@ -655,6 +624,7 @@ export async function updateBusDriverDetailsAction(rawData: any) {
     revalidatePath("/staff/my-bus");
     revalidatePath("/parent/bus");
     revalidatePath("/dashboard/parent/transport");
+    await invalidateAllStatsCaches();
 
     return {
       success: true,
@@ -1083,6 +1053,7 @@ export async function deleteBusAction(busId: string) {
     revalidatePath("/staff/my-bus");
     revalidatePath("/parent/bus");
     revalidatePath("/dashboard/parent/transport");
+    await invalidateAllStatsCaches();
 
     return {
       success: true,
@@ -1224,6 +1195,7 @@ export async function assignStudentsToBusAction(busId: string, rawPayload: any) 
     revalidatePath("/dashboard/admin/transport");
     revalidatePath("/parent/bus");
     revalidatePath("/dashboard/parent/transport");
+    await invalidateAllStatsCaches();
 
     return {
       success: true,
@@ -1278,6 +1250,7 @@ export async function removeStudentFromBusAction(busStudentIdOrBusId: string, ma
     revalidatePath("/dashboard/admin/transport");
     revalidatePath("/parent/bus");
     revalidatePath("/dashboard/parent/transport");
+    await invalidateAllStatsCaches();
 
     return {
       success: true,
@@ -1475,6 +1448,7 @@ export async function updateBusStatusAction(busId: string, rawPayload: any) {
     revalidatePath("/staff/my-bus");
     revalidatePath("/parent/bus");
     revalidatePath("/dashboard/parent/transport");
+    await invalidateAllStatsCaches();
     revalidatePath("/dashboard/parent/notifications");
 
     return {
@@ -1686,6 +1660,7 @@ export async function sendBusMessageAction(busId: string, rawPayload: any) {
     revalidatePath("/staff/my-bus");
     revalidatePath("/parent/bus");
     revalidatePath("/dashboard/parent/transport");
+    await invalidateAllStatsCaches();
     revalidatePath("/dashboard/parent/notifications");
 
     return {
@@ -2004,6 +1979,7 @@ export async function sendParentBusInquiryAction(payload: {
     revalidatePath("/staff/my-bus");
     revalidatePath("/parent/bus");
     revalidatePath("/dashboard/parent/transport");
+    await invalidateAllStatsCaches();
     revalidatePath("/dashboard/admin/notifications");
     revalidatePath("/dashboard/teacher/notifications");
 

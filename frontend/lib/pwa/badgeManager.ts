@@ -114,7 +114,8 @@ export async function syncAppBadgeWithServer(): Promise<number> {
     });
     if (res.ok) {
       const data = await res.json();
-      const count = typeof data.count === "number" ? data.count : 0;
+      const rawCount = typeof data.unreadCount === "number" ? data.unreadCount : typeof data.count === "number" ? data.count : 0;
+      const count = Math.max(0, rawCount);
       await setAppBadgeCount(count);
       return count;
     }

@@ -4,6 +4,7 @@ import { getToken } from "next-auth/jwt";
 import { getAuthOptions } from "@/backend/auth/authOptions";
 import { prisma } from "@/backend/db/prisma";
 import { invalidateUserNotifCache } from "@/backend/api/actions/notifications/unifiedNotificationActions";
+import { invalidateAllStatsCaches } from "@/backend/services/stats";
 
 export const dynamic = "force-dynamic";
 
@@ -27,7 +28,7 @@ export async function PATCH(req: NextRequest) {
     const result = await prisma.notification.updateMany({
       where: {
         userId,
-        isRead: false,
+        OR: [{ isRead: false }, { readAt: null }],
       },
       data: {
         isRead: true,
@@ -36,6 +37,7 @@ export async function PATCH(req: NextRequest) {
     });
 
     await invalidateUserNotifCache(userId);
+    await invalidateAllStatsCaches({ userId });
 
     return NextResponse.json({
       success: true,

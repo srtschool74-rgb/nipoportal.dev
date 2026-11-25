@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
 import { prisma } from "@/backend/db/prisma";
 import { invalidateUserNotifCache } from "@/backend/api/actions/notifications/unifiedNotificationActions";
+import { invalidateAllStatsCaches } from "@/backend/services/stats";
 
 export const dynamic = "force-dynamic";
 
@@ -13,13 +14,15 @@ export async function POST(req: NextRequest) {
     const { notificationId, markAll = false } = body;
 
     const targetUserId = session?.user?.id;
+    const now = new Date();
 
     if (markAll && targetUserId) {
       await prisma.notification.updateMany({
-        where: { userId: targetUserId, isRead: false },
-        data: { isRead: true },
+        where: { userId: targetUserId, OR: [{ isRead: false }, { readAt: null }] },
+        data: { isRead: true, readAt: now },
       });
       await invalidateUserNotifCache(targetUserId);
+      await invalidateAllStatsCaches({ userId: targetUserId });
       return NextResponse.json({ success: true, markedAll: true });
     }
 
@@ -29,11 +32,12 @@ export async function POST(req: NextRequest) {
           id: notificationId,
           ...(targetUserId ? { userId: targetUserId } : {}),
         },
-        data: { isRead: true },
+        data: { isRead: true, readAt: now },
       });
 
       if (targetUserId) {
         await invalidateUserNotifCache(targetUserId);
+        await invalidateAllStatsCaches({ userId: targetUserId });
       }
       return NextResponse.json({ success: true, notificationId });
     }

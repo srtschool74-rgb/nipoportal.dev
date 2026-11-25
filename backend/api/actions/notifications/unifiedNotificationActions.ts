@@ -4,6 +4,7 @@ import { prisma } from "@/backend/db/prisma";
 import { revalidatePath } from "next/cache";
 import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
+import { invalidateAllStatsCaches } from "@/backend/services/stats";
 
 export type UnifiedNotification = {
   id: string;
@@ -763,6 +764,7 @@ export async function markNotificationsAsSeenInPopupAction(notificationIds: stri
     revalidatePath("/dashboard/parent/notifications");
     revalidatePath("/dashboard/teacher/notifications");
     revalidatePath("/dashboard");
+    await invalidateAllStatsCaches({ userId });
 
     return { success: true };
   } catch (error) {

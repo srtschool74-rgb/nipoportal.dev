@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth/next";
 import { getToken } from "next-auth/jwt";
 import { getAuthOptions } from "@/backend/auth/authOptions";
 import { prisma } from "@/backend/db/prisma";
+import { getUnreadNotificationStats } from "@/backend/services/stats";
 
 export const dynamic = "force-dynamic";
 
@@ -31,12 +32,12 @@ export async function GET(req: NextRequest) {
 
     const where: any = {
       userId,
-      ...(unreadOnly ? { isRead: false } : {}),
+      ...(unreadOnly ? { readAt: null, isRead: false } : {}),
       ...(typeFilter ? { type: typeFilter.toUpperCase() } : {}),
       ...(categoryFilter ? { category: categoryFilter.toUpperCase() } : {}),
     };
 
-    const [items, total, unreadCount] = await Promise.all([
+    const [items, total, unreadStats] = await Promise.all([
       prisma.notification.findMany({
         where,
         orderBy: { createdAt: "desc" },
@@ -44,9 +45,7 @@ export async function GET(req: NextRequest) {
         take: limit,
       }),
       prisma.notification.count({ where }),
-      prisma.notification.count({
-        where: { userId, isRead: false },
-      }),
+      getUnreadNotificationStats(userId),
     ]);
 
     const totalPages = Math.ceil(total / limit);
@@ -55,7 +54,9 @@ export async function GET(req: NextRequest) {
       success: true,
       items,
       total,
-      unreadCount,
+      unreadCount: unreadStats.unreadCount,
+      notificationCount: unreadStats.notificationCount,
+      messageCount: unreadStats.messageCount,
       page,
       limit,
       totalPages,

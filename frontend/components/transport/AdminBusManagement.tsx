@@ -49,11 +49,16 @@ import {
   triggerBusKeypadAction,
 } from "@/backend/api/actions/dashboard/admin/transport/actions";
 import { isDayScholarStudent } from "@/backend/lib/transport/dayScholarHelper";
+import { computeBusSeatMetrics } from "@/backend/services/stats/transport";
 
 interface TransportSummaryMetrics {
   totalBuses: number;
   runningBuses: number;
   issuesBuses: number;
+  totalCapacity?: number;
+  totalAssignedDayScholars?: number;
+  totalAvailableSeats?: number;
+  fleetOccupancyPercentage?: number;
   totalDayScholars: number;
   dayScholarsOnBuses: number;
   dayScholarsUnassigned: number;
@@ -978,6 +983,46 @@ export default function AdminBusManagement({
             </div>
           </div>
         </div>
+
+        {/* Card 6: Fleet Seat Occupancy */}
+        <div
+          title="Seat capacity vs assigned Day Scholars (Hostel students excluded)"
+          style={{
+            backgroundColor: "var(--card)",
+            border: "1px solid var(--border)",
+            borderRadius: "10px",
+            padding: "0.65rem 0.85rem",
+            display: "flex",
+            alignItems: "center",
+            gap: "0.65rem",
+          }}
+        >
+          <div
+            style={{
+              width: "36px",
+              height: "36px",
+              borderRadius: "8px",
+              backgroundColor: "rgba(59, 130, 246, 0.12)",
+              color: "var(--primary)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+            }}
+          >
+            <Bus size={18} />
+          </div>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: "0.72rem", color: "var(--text-secondary)", textTransform: "uppercase", fontWeight: 600, letterSpacing: "0.03em" }}>
+              Seat Occupancy
+            </div>
+            <div style={{ fontSize: "1.05rem", fontWeight: 700, color: "var(--foreground)", lineHeight: 1.2 }}>
+              {summaryMetrics?.fleetOccupancyPercentage !== undefined
+                ? `${summaryMetrics.fleetOccupancyPercentage.toFixed(1)}% (${summaryMetrics.totalAvailableSeats ?? 0} free)`
+                : `${computeBusSeatMetrics(buses.reduce((a, b) => a + (b.capacity || 0), 0), totalEnrolled).occupancyPercentage.toFixed(1)}%`}
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* COMPACT SEARCH & FILTER CONTROLS */}
@@ -1124,10 +1169,11 @@ export default function AdminBusManagement({
           }}
         >
           {filteredBuses.map((bus) => {
-            const assigned = bus._count?.students || 0;
-            const capacity = bus.capacity || 40;
-            const percent = Math.min(100, Math.round((assigned / capacity) * 100));
-            const availableSeats = Math.max(0, capacity - assigned);
+            const seatMetrics = bus.seatMetrics ?? computeBusSeatMetrics(bus.capacity || 0, bus._count?.students || 0);
+            const assigned = seatMetrics.assigned;
+            const capacity = seatMetrics.capacity;
+            const percent = seatMetrics.occupancyPercentage;
+            const availableSeats = seatMetrics.availableSeats;
 
             const isRunning = bus.status === "RUNNING";
             const isDelayed = bus.status === "DELAYED";

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getCachedServerSession } from '@/backend/auth/sessionCache';
 import { prisma } from '@/backend/db/prisma';
+import { getAdminDashboardSummary } from '@/backend/services/stats';
 import { createClient } from '@supabase/supabase-js';
 
 export const dynamic = 'force-dynamic';
@@ -29,15 +30,14 @@ export async function GET() {
     neonPingMs = Math.round((performance.now() - t0) * 100) / 100;
 
     const t1 = performance.now();
-    const [users, students, classes] = await Promise.all([
+    const [users, summary] = await Promise.all([
       prisma.user.count(),
-      prisma.student.count(),
-      prisma.class.count(),
+      getAdminDashboardSummary({ role: 'ADMIN' }),
     ]);
     neonQueryMs = Math.round((performance.now() - t1) * 100) / 100;
     userCount = users;
-    studentCount = students;
-    classCount = classes;
+    studentCount = summary.students.activeStudents;
+    classCount = summary.classes.totalSections;
   } catch (err: unknown) {
     neonStatus = 'error';
     neonError = err instanceof Error ? err.message : String(err);
@@ -78,7 +78,9 @@ export async function GET() {
       verificationLatencyMs: authLatencyMs,
     },
     primaryDatabase: {
-      provider: 'Neon PostgreSQL (Singapore ap-southeast-1)',
+      provider: process.env.DATABASE_URL?.includes('supabase')
+        ? 'Supabase PostgreSQL (ap-northeast-1)'
+        : 'PostgreSQL Primary Database',
       status: neonStatus,
       pingLatencyMs: neonPingMs,
       aggregatedQueryMs: neonQueryMs,
@@ -91,7 +93,7 @@ export async function GET() {
       error: neonError,
     },
     secondaryDatabase: {
-      provider: 'Supabase (Ireland eu-west-1)',
+      provider: 'Supabase Auth & Storage',
       endpoint: supaUrl ? supaUrl.replace(/\/+$/, '') : null,
       status: supabaseStatus,
       latencyMs: supabaseLatencyMs,
