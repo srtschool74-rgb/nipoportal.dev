@@ -1,7 +1,11 @@
 import { Prisma } from "@prisma/client";
+import {
+  RESIDENCE_TYPE_DAYSCHOLAR,
+  RESIDENCE_TYPE_HOSTEL,
+  isDayScholarStudent,
+} from "@/shared/types/transport";
 
-export const RESIDENCE_TYPE_DAYSCHOLAR = "DAYSCHOLAR";
-export const RESIDENCE_TYPE_HOSTEL = "HOSTEL";
+export { RESIDENCE_TYPE_DAYSCHOLAR, RESIDENCE_TYPE_HOSTEL, isDayScholarStudent };
 
 /**
  * Single source of truth for Prisma queries:
@@ -31,21 +35,5 @@ export function getDayScholarBusStudentWhere(academicYear?: string): Prisma.BusS
     ...(academicYear ? { academicYear } : {}),
     student: getDayScholarWhere(),
   };
-}
-
-/**
- * Synchronous validation helper for student objects.
- * Strictly guarantees that hostel students are NEVER treated as day scholars.
- */
-export function isDayScholarStudent(student?: {
-  residenceType?: string | null;
-  isActive?: boolean | null;
-} | null): boolean {
-  if (!student) return false;
-  if (student.isActive === false) return false;
-  if (!student.residenceType || student.residenceType.trim() === "") return true; // defaults to DAYSCHOLAR
-  const val = String(student.residenceType).trim().toUpperCase();
-  if (val.includes("HOSTEL")) return false;
-  return val.includes("DAY") || val === RESIDENCE_TYPE_DAYSCHOLAR;
 }
 

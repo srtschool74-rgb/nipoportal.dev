@@ -9,6 +9,7 @@ export default defineConfig({
   },
   resolve: {
     alias: {
+      "server-only": path.resolve(__dirname, "./node_modules/server-only/empty.js"),
       "@/backend": path.resolve(__dirname, "./backend"),
       "@/frontend": path.resolve(__dirname, "./frontend"),
       "@/types": path.resolve(__dirname, "./frontend/types"),

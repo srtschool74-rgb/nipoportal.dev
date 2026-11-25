@@ -16,7 +16,7 @@ import {
   deleteImportBatchAction,
   generateErrorReportAction
 } from "@/backend/api/actions/dashboard/admin/excel-import/actions";
-import { RowValidationResult, ExcelScanResult, ImportCommitResult } from "@/backend/lib/services/excelImportEngine";
+import type { RowValidationResult, ExcelScanResult, ImportCommitResult } from "@/backend/lib/services/excelImportEngine";
 import { useConfirm } from "@/frontend/components/ui/ConfirmDialog";
 import { Modal } from "@/frontend/components/ui";
 

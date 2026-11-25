@@ -1,3 +1,4 @@
+import "server-only";
 import { prisma } from "@/backend/db/prisma";
 import { getSchoolNow, coerceToDate } from "@/lib/time";
 import {

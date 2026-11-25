@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import styles from "./ProfessionalSchoolCalendar.module.css";
-import {
+import type {
   MonthCalendarData,
   CalendarDayModel,
   SerializedCalendarEvent,

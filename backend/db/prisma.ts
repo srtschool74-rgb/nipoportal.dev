@@ -1,3 +1,4 @@
+import "server-only";
 import { db, dbSecondary, prisma } from "@/lib/db";
 
 export { db, dbSecondary, prisma };

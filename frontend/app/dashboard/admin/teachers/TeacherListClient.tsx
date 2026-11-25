@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
-import type { TeacherStatsSummary } from "@/backend/services/stats/types";
+import type { TeacherStatsSummary } from "@/shared/types/stats";
 import { notifyStatsUpdated } from "@/frontend/hooks/useStatsLiveRefresh";
 import { useRouter } from "next/navigation";
 import {

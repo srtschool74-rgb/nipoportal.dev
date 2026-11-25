@@ -4,10 +4,10 @@ import { useState } from "react";
 import Link from "next/link";
 import { Book, Eye, EyeOff, CheckCircle2, Circle, AlertTriangle } from "lucide-react";
 import { toggleExamPublishAction } from "@/backend/api/actions/dashboard/admin/exams/actions";
-import { Exam, Class, Student, Subject, Mark, ExamRequest, Teacher, User } from "@prisma/client";
+import type { Exam, Class, Student, Subject, Mark, ExamRequest, Teacher, User } from "@prisma/client";
 import { BarChart, Bar, Tooltip, ResponsiveContainer, Cell } from "recharts";
 import { acceptExamRequest, declineExamRequest } from "@/backend/api/actions/dashboard/admin/exams/actions";
-import { getUnifiedReportCardGrade } from "@/backend/services/stats/academics";
+import { getUnifiedReportCardGrade } from "@/shared/types/academics";
 import { useConfirm } from "@/frontend/components/ui/ConfirmDialog";
 
 import styles from "./ExamsClient.module.css";

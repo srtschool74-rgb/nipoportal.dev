@@ -1,6 +1,7 @@
+import "server-only";
 import { prisma } from "@/backend/db/prisma";
 import { getDayScholarWhere } from "@/backend/lib/transport/dayScholarHelper";
-import { computeBusSeatMetrics } from "./transportMetrics";
+import { computeBusSeatMetrics } from "@/shared/types/transport";
 import { withShortStatsCache } from "./cache";
 import { BusFleetSummary } from "./types";
 

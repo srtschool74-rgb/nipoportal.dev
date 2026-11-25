@@ -62,6 +62,7 @@ export default function StaffMyBusClient({ buses: initialBuses, staffName }: Sta
     currentBus?.driverDob ? new Date(currentBus.driverDob).toISOString().split("T")[0] : ""
   );
   const [routeDescriptionInput, setRouteDescriptionInput] = useState(currentBus?.routeDescription || "");
+  const [statusInput, setStatusInput] = useState<string>(currentBus?.status || "RUNNING");
 
   // Emergency SOS confirmation modal
   const [confirmEmergencyModal, setConfirmEmergencyModal] = useState(false);
@@ -155,7 +156,6 @@ export default function StaffMyBusClient({ buses: initialBuses, staffName }: Sta
   // ==========================================
   // STATUS UPDATE & ISSUE REPORTING
   // ==========================================
-  const [statusInput, setStatusInput] = useState<string>(currentBus?.status || "RUNNING");
   const [issueTypeInput, setIssueTypeInput] = useState<string>("BREAKDOWN");
   const [issueDescriptionInput, setIssueDescriptionInput] = useState("");
 

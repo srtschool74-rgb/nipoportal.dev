@@ -1,7 +1,8 @@
+import "server-only";
 import { invalidateCalendarStatsCache } from "@/backend/api/actions/dashboard/attendance/calendarStats";
 import { invalidateUserNotifCache } from "@/backend/api/actions/notifications/unifiedNotificationActions";
-import { invalidateParentRecordCache } from "@/frontend/app/dashboard/parent/parentChildHelper";
-import { invalidateTeacherCache } from "@/frontend/app/dashboard/teacher/teacherHelper";
+import { invalidateParentRecordCache } from "@/backend/services/parent/parentChildHelper";
+import { invalidateTeacherCache } from "@/backend/services/teacher/teacherHelper";
 
 interface StatsCacheEntry<T> {
   value: T;

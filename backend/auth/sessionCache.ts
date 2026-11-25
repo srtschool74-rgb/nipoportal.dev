@@ -1,3 +1,4 @@
+import "server-only";
 import { cache } from "react";
 import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";

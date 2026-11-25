@@ -1,3 +1,4 @@
+import "server-only";
 import { prisma } from "@/backend/db/prisma";
 import { NotificationUnreadStats } from "./types";
 

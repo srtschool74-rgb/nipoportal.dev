@@ -1,6 +1,5 @@
 import Link from "next/link";
 import styles from "./UniversalDashboard.module.css";
-import { prisma } from "@/backend/db/prisma";
 import {
   Bell,
   Calendar,
@@ -26,11 +25,17 @@ interface UniversalDashboardProps {
     role: string;
   };
   noticeMessage?: string;
+  initialAnnouncements?: any[];
+  initialCalendarEvents?: any[];
+  initialUnreadCount?: number;
 }
 
 export default async function UniversalDashboard({
   user,
   noticeMessage,
+  initialAnnouncements = [],
+  initialCalendarEvents = [],
+  initialUnreadCount = 0,
 }: UniversalDashboardProps) {
   const role = (user.role || "PARENT").toUpperCase();
   const roleSlug = role.toLowerCase();
@@ -44,60 +49,9 @@ export default async function UniversalDashboard({
     year: "numeric",
   });
 
-  // Query latest announcements and events with safe catch
-  let announcements: any[] = [];
-  let calendarEvents: any[] = [];
-  let unreadMessageCount = 0;
-
-  try {
-    const [fetchedAnnouncements, fetchedEvents, msgCount] = await Promise.all([
-      prisma.announcement.findMany({
-        where: {
-          OR: [
-            { targetType: "ALL" },
-            { targetType: role === "TEACHER" ? "TEACHERS" : "PARENTS" },
-          ],
-        },
-        orderBy: { createdAt: "desc" },
-        take: 3,
-        select: {
-          id: true,
-          title: true,
-          content: true,
-          priority: true,
-          createdAt: true,
-        },
-      }).catch(() => []),
-
-      prisma.calendarEvent.findMany({
-        where: {
-          isPublished: true,
-          date: { gte: new Date() },
-        },
-        orderBy: { date: "asc" },
-        take: 3,
-        select: {
-          id: true,
-          title: true,
-          type: true,
-          date: true,
-        },
-      }).catch(() => []),
-
-      prisma.message.count({
-        where: {
-          receiverId: user.id,
-          isRead: false,
-        },
-      }).catch(() => 0),
-    ]);
-
-    announcements = fetchedAnnouncements;
-    calendarEvents = fetchedEvents;
-    unreadMessageCount = msgCount;
-  } catch {
-    // Non-blocking fallbacks
-  }
+  let announcements: any[] = initialAnnouncements;
+  let calendarEvents: any[] = initialCalendarEvents;
+  let unreadMessageCount = initialUnreadCount;
 
   // Fallback sample announcements if database has none
   if (announcements.length === 0) {

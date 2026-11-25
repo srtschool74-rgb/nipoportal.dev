@@ -36,5 +36,21 @@
     ".next/dev/types/**/*.ts",
     "**/*.mts"
   ],
-  "exclude": ["node_modules", "android", "ios", ".next", "tests", "capacitor.config.ts", "scripts"]
+  "exclude": [
+    "node_modules",
+    "android",
+    "ios",
+    ".next",
+    "capacitor.config.ts",
+    "scripts",
+    "scratch",
+    "vitest.config.ts",
+    "vitest.setup.ts",
+    "**/*.test.ts",
+    "**/*.test.tsx",
+    "**/*.spec.ts",
+    "**/*.spec.tsx",
+    "tests",
+    "__tests__"
+  ]
 }

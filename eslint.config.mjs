@@ -34,6 +34,30 @@ const eslintConfig = defineConfig([
       "react-hooks/exhaustive-deps": "warn",
     },
   },
+  {
+    files: ["frontend/components/**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: [
+                "@/backend/services/**",
+                "@/backend/db/**",
+                "@/backend/auth/**",
+                "backend/services/**",
+                "backend/db/**",
+                "backend/auth/**",
+                "server-only",
+              ],
+              message: "Client and UI components must not import server-only backend modules or services. Use server actions or shared types.",
+            },
+          ],
+        },
+      ],
+    },
+  },
 ]);
 
 export default eslintConfig;

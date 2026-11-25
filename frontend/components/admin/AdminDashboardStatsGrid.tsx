@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { Users, GraduationCap, BookOpen, Briefcase, UserCheck, ShieldCheck } from "lucide-react";
-import type { AdminDashboardSummary } from "@/backend/services/stats/types";
+import type { AdminDashboardSummary } from "@/shared/types/stats";
 import { useStatsLiveRefresh } from "@/frontend/hooks/useStatsLiveRefresh";
 import DashboardSectionSkeleton from "@/frontend/components/ui/DashboardSectionSkeleton";
 import styles from "@/frontend/app/dashboard/dashboard.module.css";

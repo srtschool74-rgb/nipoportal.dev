@@ -5,9 +5,9 @@ import { useRouter } from "next/navigation";
 import { Search, Eye, CheckCircle2, XCircle, MoreVertical, Trash2, Download, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { deactivateParent, activateParent, deleteParent } from "@/backend/api/actions/dashboard/admin/parents/actions";
-import { Parent, User, ParentStudent, Student, Class } from "@prisma/client";
+import type { Parent, User, ParentStudent, Student, Class } from "@prisma/client";
 import { useConfirm } from "@/frontend/components/ui/ConfirmDialog";
-import type { ParentStatsSummary } from "@/backend/services/stats/types";
+import type { ParentStatsSummary } from "@/shared/types/stats";
 import { notifyStatsUpdated } from "@/frontend/hooks/useStatsLiveRefresh";
 import { SearchBar, ResultsContainer } from "@/frontend/components/ui";
 

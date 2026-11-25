@@ -1,3 +1,4 @@
+import "server-only";
 import { prisma } from "@/backend/db/prisma";
 import { SUPER_ADMIN_EMAILS } from "@/backend/lib/auth/superAdmin";
 import { getDayScholarWhere } from "@/backend/lib/transport/dayScholarHelper";

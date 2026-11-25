@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import type { AdminDashboardSummary } from "@/backend/services/stats/types";
+import type { AdminDashboardSummary } from "@/shared/types/stats";
 
 const STATS_EVENT = "srt:stats-updated";
 

@@ -13,7 +13,7 @@ import {
   saveStaffShiftBatchAction,
   type StaffShiftPeriodSlot
 } from "@/backend/api/actions/dashboard/admin/substitution/substitutionActions";
-import { formatSchoolDate } from "@/backend/lib/timetable/getEffectiveTimetable";
+import { formatSchoolDate } from "@/lib/time";
 
 const DAYS = ["SUNDAY", "MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"];
 const SCHOOL_DAYS = ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"];

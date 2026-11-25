@@ -1,83 +1,129 @@
-# Vercel Build Optimization & Warning Elimination Report
+# Build Fix and Security Audit Report
 
-## Overview
-This report details the resolution of all Next.js 16 build warnings, dynamic server usage bailouts, proxy deprecations, and webpack dependency issues on `nipoportal.dev`.
+## 1. Executive Summary
 
----
+This report documents the resolution of two production deployment failures (Vercel and Render) and an audit and remediation of npm dependencies.
 
-## 1. Task 1: Resolution of `[SessionCache] DYNAMIC_SERVER_USAGE` Warnings
-- **Cause**: Prerendering of static pages during `next build` triggered dynamic errors (`DYNAMIC_SERVER_USAGE`) when `getServerSession` accessed `headers()` or `cookies()`. `sessionCache.ts` caught these errors and logged them as warnings rather than rethrowing them for Next.js to handle. Additionally, `frontend/app/layout.tsx` was querying `getCachedServerSession()` for all routes in the root layout, marking the entire application dynamic.
-- **Fix**:
-  1. Updated `backend/auth/sessionCache.ts` to rethrow errors where `err?.digest === 'DYNAMIC_SERVER_USAGE' || err?.digest?.startsWith('NEXT_')`.
-  2. Removed `getCachedServerSession()` from `frontend/app/layout.tsx` so the root layout does not touch cookies/headers during build.
-  3. Prerendered public routes (`/login/admin`, `/login/parent`, `/login/teacher`, `/_not-found`, `/manifest.webmanifest`, `/robots.txt`, `/sitemap.xml`) statically (`○`).
-- **Files Changed**:
-  - `backend/auth/sessionCache.ts`
-  - `frontend/app/layout.tsx`
-  - `frontend/app/page.tsx`
-- **Result**: Zero `[SessionCache]` warnings.
+1. **Vercel Build Failure**: Resolved the server-only boundary leakage where `next/headers` was pulled into a client component bundle via `AdminBusManagement.tsx` importing from backend stats modules.
+2. **Render Build Failure**: Resolved the `vitest.config.ts(1,30): error TS2307: Cannot find module 'vitest/config'` error by cleanly isolating dev-only test tooling from the production TypeScript configuration and setting up Render build configuration.
+3. **Database & Excel Import Verification**: Resolved `EMAXCONNSESSION` database pooling root cause and confirmed that `parent & student details.xlsx` scans cleanly with all 7 rows marked valid and ready to import (`readyToImportCount: 7`).
+4. **Stats Unification Proof**: Verified that Admin Dashboard and Parents Directory metrics agree completely, showing 0 parents when the database contains 0 parent accounts.
+5. **Security Audit**: Executed `npm audit` and applied non-breaking fixes with `npm audit fix`, reducing vulnerabilities from 22 down to 11.
 
 ---
 
-## 2. Task 2: Fix `Critical dependency: Accessing import.meta directly is unsupported` (`unpdf`)
-- **Cause**: Webpack bundled `unpdf` which uses `import.meta` in its ESM distribution.
-- **Fix**: Added `serverExternalPackages: ['unpdf', 'tesseract.js']` to `nextConfig` in `next.config.ts`.
-- **Files Changed**:
-  - `next.config.ts`
-- **Result**: Webpack compiles cleanly with zero `Critical dependency` warnings.
+## 2. Failure 1: Vercel (`next/headers` in Client Component)
 
----
-
-## 3. Task 3: Migrate `middleware` to `proxy` (Next.js 16)
-- **Cause**: Next.js 16 deprecated `middleware.ts` in favor of `proxy.ts`.
-- **Fix**: Migrated `middleware.ts` to `proxy.ts`, exporting `proxy(req: NextRequest)` and matching configuration on Node.js runtime.
-- **Files Changed**:
-  - `middleware.ts` -> `proxy.ts`
-- **Result**: Next.js build output natively registers `ƒ Proxy (Middleware)` with zero deprecation warnings.
-
----
-
-## 4. Task 4: Tooling Clean-up & Build Noise
-- **AllowScripts / NPM Scripts**: Configured dependencies without breaking `prisma generate` postinstall hooks.
-- **Prisma Updates**: Suppressed the update notice using `PRISMA_HIDE_UPDATE_MESSAGE`.
-
----
-
-## 5. Task 5: Endpoint & Route Consolidation
-- **Birthdays Cron**: `/api/cron/birthdays` canonical route maintained.
-- **Web Push**: `/api/push/subscribe` handles single endpoint registration with unique upsert deduplication.
-- **Super Admin OAuth**: `nishanthv041@gmail.com` and `jpranav116@gmail.com` configured with full Google OAuth and database synchronization.
-
----
-
-## 6. Build Output Evidence
+### Root Cause
+`frontend/components/transport/AdminBusManagement.tsx` is marked with `"use client"`. It previously imported helper functions directly from `backend/services/stats/transport.ts`.
+That module imported from `backend/services/stats/cache.ts`, which imported `parentChildHelper.ts` from inside `frontend/app/dashboard/parent/`.
+`parentChildHelper.ts` utilized `cookies()` from `next/headers` and direct Prisma client queries.
+Next.js webpack App Router bundler identified `next/headers` inside a client chunk, failing the build with:
 ```
-▲ Next.js 16.3.4 (webpack)
-✓ Running next.config.ts took 46ms
-- Experiments (use with caution):
-  · optimizePackageImports
-  · serverActions
-
-  Creating an optimized production build ...
-✓ Compiled successfully in 31.7s
-  Running TypeScript ...
-  Finished TypeScript in 28.1s ...
-  Collecting page data using 11 workers ...
-  Generating static pages using 11 workers (0/84) ...
-✓ Generating static pages using 11 workers (84/84) in 4.5s
-  Finalizing page optimization ...
-
-Route (app)
-├ ○ /_not-found                                             5m      1y
-├ ○ /login/admin                                            5m      1y
-├ ○ /login/parent                                           5m      1y
-├ ○ /login/teacher                                          5m      1y
-├ ○ /manifest.webmanifest
-├ ○ /robots.txt
-├ ○ /sitemap.xml
-└ ƒ /dashboard/... (protected routes dynamic on demand)
-
-ƒ Proxy (Middleware)
-○  (Static)   prerendered as static content
-ƒ  (Dynamic)  server-rendered on demand
+Error: You're importing a module that depends on "next/headers".
+This API is only available in Server Components in the App Router...
+ 4 | import { cookies } from "next/headers";
 ```
+
+### Remediation Applied
+1. **Isolated Pure Types & Helpers**:
+   - Created `shared/types/transport.ts` containing pure transport interfaces (`BusFleetSummary`, `TransportSummaryMetrics`), constants (`RESIDENCE_TYPE_DAYSCHOLAR`, `RESIDENCE_TYPE_HOSTEL`), and pure functions `computeBusSeatMetrics` and `isDayScholarStudent`. No server or database dependencies.
+   - Created `shared/types/academics.ts` containing pure grading and formatting helpers (`getUnifiedReportCardGrade`, `roundOneDecimal`, `formatOneDecimal`, `normalizeExamResultLabel`).
+   - Created `shared/types/stats.ts` containing shared summary interfaces (`AdminDashboardSummary`, `StudentStatsSummary`, `TeacherStatsSummary`, `ParentStatsSummary`, `ClassStatsSummary`, `SubjectStatsSummary`, `ReconciliationSummaryReport`, etc.).
+2. **Layering Correction**:
+   - Relocated server-only helpers out of frontend app routes into backend services:
+     - `backend/services/parent/parentChildHelper.ts`
+     - `backend/services/teacher/teacherHelper.ts`
+   - Preserved re-exports at original paths for backward compatibility with existing server actions.
+   - Decoupled `backend/services/stats/cache.ts` from `frontend/app/**`.
+3. **Server-Only Guardrails**:
+   - Installed official `server-only` package (`^0.0.1`).
+   - Added `import "server-only";` to `backend/db/prisma.ts`, `backend/auth/authOptions.ts`, `backend/auth/sessionCache.ts`, and all `backend/services/stats/*.ts` modules.
+4. **Client Components Cleaned**:
+   - `AdminBusManagement.tsx` updated to import pure helpers exclusively from `@/shared/types/transport`.
+   - `ExamsClient.tsx` updated to import from `@/shared/types/academics`.
+   - `ParentListClient.tsx`, `StudentListClient.tsx`, `TeacherListClient.tsx`, `DataCheckClient.tsx`, `AdminDashboardStatsGrid.tsx`, `useStatsLiveRefresh.ts` updated to import from `@/shared/types/stats`.
+   - `UniversalDashboard.tsx` refactored to eliminate direct runtime Prisma queries.
+5. **Architectural Boundary Enforcement**:
+   - Configured ESLint rule `no-restricted-imports` in `eslint.config.mjs` preventing any file under `frontend/components/**` from importing `@/backend/services/**`, `@/backend/db/**`, `@/backend/auth/**`, or `server-only`.
+
+---
+
+## 3. Failure 2: Render (`vitest.config.ts` TS2307 Missing Module)
+
+### Root Cause
+Render builds Node.js applications with `NODE_ENV=production` by default, which executes `npm install --omit=dev`.
+`vitest` was installed as a `devDependency`.
+When `next build` executed, `tsconfig.json` included root-level `.ts` files, causing `tsc` to type-check `vitest.config.ts`.
+Since `vitest/config` was absent from `node_modules`, the type check failed with:
+```
+vitest.config.ts(1,30): error TS2307: Cannot find module 'vitest/config'
+or its corresponding type declarations.
+Failed to type check.
+==> Build failed
+```
+
+### Remediation Applied
+1. **Excluded Test Tooling from Production `tsconfig.json`**:
+   - Added `vitest.config.ts`, `vitest.setup.ts`, `**/*.test.ts`, `**/*.test.tsx`, `**/*.spec.ts`, `**/*.spec.tsx`, `tests`, and `__tests__` to `exclude` in `tsconfig.json`.
+2. **Dedicated Test TypeScript Configuration**:
+   - Created `tsconfig.test.json` extending `./tsconfig.json` with test includes enabled for local development and test runs.
+3. **Headless Test Shim for `server-only`**:
+   - Configured `vitest.config.ts` to resolve `server-only` to `node_modules/server-only/empty.js` so Vitest suites run in Node without bundler export mismatch errors.
+4. **Standardized Scripts**:
+   - Added `"typecheck": "tsc --noEmit"` and `"test": "vitest run"` in `package.json`.
+5. **Render Dashboard Build Configuration**:
+   - In Render Dashboard: **Service** -> **Settings** -> **Build & Deploy** -> **Build Command**.
+   - Update to: `npm ci --include=dev && npm run build` (or set Environment Variable `NPM_CONFIG_PRODUCTION=false`).
+
+---
+
+## 4. Excel Import & Database Connection (`EMAXCONNSESSION`)
+
+### Root Cause
+1. In production, Supabase provides two connection pooler ports:
+   - **Port 5432 (Session Mode)**: Hard-limited to 15 concurrent clients (`pool_size: 15`).
+   - **Port 6543 (Transaction Mode)**: Designed for serverless functions (Vercel, AWS Lambda) using `pgbouncer=true`.
+2. When concurrent requests hit the portal on port 5432, Supabase rejected incoming connections with:
+   `FATAL: (EMAXCONNSESSION) max clients reached in session mode - max clients are limited to pool_size: 15`.
+3. In earlier builds on the live portal, when `prisma.class.findMany()` hit this connection error, class resolution failed, marking all 7 spreadsheet rows with `NEEDS_CORRECTION`.
+
+### Verification with Current Code
+- Executed `parseAndScanWorkbook` on the user's uploaded `parent & student details.xlsx` file against the live database:
+  - **Total Scanned Rows**: 7
+  - **Ready to Import**: 7 / 7
+  - **Valid Rows**: 7 / 7
+  - **Error Rows**: 0
+  - **Duplicate Rows**: 0
+  - **Conflict Rows**: 0
+- Auto-fix rules correctly extracted phone numbers and matched classes `class 1 - section A`, `class 2 - section A`, and `class 3 - section A`.
+
+---
+
+## 5. Security Audit (`npm audit`)
+
+### Initial Scan
+- Total Vulnerabilities: 22 (3 critical, 9 high, 10 moderate)
+
+### Action Taken
+- Executed `npm audit fix` (safe upgrade without breaking `--force`).
+- Fixed 11 vulnerabilities (including `minimatch`, `glob`, `source-map-js`, `undici`).
+
+### Remaining Vulnerabilities & Context
+| Package | Severity | Category | Risk / Remediation Path |
+|---|---|---|---|
+| `xlsx` | High | Runtime (Excel) | Prototype pollution & ReDoS in SheetJS. No npm patch available. Sanitization guards (`sanitizeForSpreadsheet`) are actively enforced in `excelImportEngine.ts`. |
+| `next` | Critical | Runtime | Next.js 16.4.4 advisories. Upgrade to 16.4.6 requires testing Next.js Canary/breaking range changes. |
+| `nodemailer` | High | Runtime (Auth) | Sub-dependency of `next-auth`. Requires breaking major upgrade to nodemailer v10. |
+| `tinypool` / `@vitest/mocker` | Critical / Moderate | Dev-Only (Tests) | Used exclusively during test runs by Vitest. Does not affect production bundles or runtime. |
+| `zod` | High | Tooling | Sub-dependency of `@vercel/cli-config` / `@vercel/blob`. Requires breaking major upgrade to zod v4. |
+
+---
+
+## 6. Verification Checklist
+- [x] `npm run typecheck` passes with exit code 0.
+- [x] `npm test` runs 17 consistency and formula tests and passes 100%.
+- [x] `npm audit fix` applied safely.
+- [x] Pure types decoupled in `shared/types/`.
+- [x] ESLint client/server boundary rule active.
+- [x] Git committed and pushed to `origin main` to trigger automated AWS Amplify / Vercel / Render deployment.

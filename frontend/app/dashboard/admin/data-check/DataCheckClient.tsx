@@ -14,7 +14,7 @@ import {
   GraduationCap,
   BookOpen,
 } from "lucide-react";
-import type { DataCheckIssue, ReconciliationSummaryReport } from "@/backend/services/stats/types";
+import type { DataCheckIssue, ReconciliationSummaryReport } from "@/shared/types/stats";
 import {
   fixDataCheckIssueAction,
   runDataCheckAction,
@@ -362,3 +362,4 @@ export default function DataCheckClient({ initialReport }: DataCheckClientProps)
     </div>
   );
 }
+

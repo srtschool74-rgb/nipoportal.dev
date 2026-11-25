@@ -48,21 +48,11 @@ import {
   updateBusStudentRouteAction,
   triggerBusKeypadAction,
 } from "@/backend/api/actions/dashboard/admin/transport/actions";
-import { isDayScholarStudent } from "@/backend/lib/transport/dayScholarHelper";
-import { computeBusSeatMetrics } from "@/backend/services/stats/transportMetrics";
-
-interface TransportSummaryMetrics {
-  totalBuses: number;
-  runningBuses: number;
-  issuesBuses: number;
-  totalCapacity?: number;
-  totalAssignedDayScholars?: number;
-  totalAvailableSeats?: number;
-  fleetOccupancyPercentage?: number;
-  totalDayScholars: number;
-  dayScholarsOnBuses: number;
-  dayScholarsUnassigned: number;
-}
+import {
+  isDayScholarStudent,
+  computeBusSeatMetrics,
+  type TransportSummaryMetrics,
+} from "@/shared/types/transport";
 
 interface AdminBusManagementProps {
   initialBuses: any[];

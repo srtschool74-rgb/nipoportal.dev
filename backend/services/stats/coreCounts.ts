@@ -1,3 +1,4 @@
+import "server-only";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/backend/db/prisma";
 import { getDayScholarWhere } from "@/backend/lib/transport/dayScholarHelper";

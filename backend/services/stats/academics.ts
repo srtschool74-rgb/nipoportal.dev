@@ -1,3 +1,4 @@
+import "server-only";
 import {
   DEFAULT_GRADE_BOUNDARIES,
   GradeBoundary,

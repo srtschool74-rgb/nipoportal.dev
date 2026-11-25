@@ -1,4 +1,4 @@
-import { normalizeExamResultLabel } from "@/backend/services/stats/academics";
+import { normalizeExamResultLabel } from "@/shared/types/academics";
 
 export interface ConsolidatedExportSubject {
   id: string;

@@ -11,7 +11,7 @@ import {
   simulateBatchPromotionAction, 
   executeBatchPromotionAction 
 } from "@/backend/api/actions/dashboard/admin/batches/actions";
-import { PromotionSimulationResult } from "@/backend/lib/services/batchPromotionEngine";
+import type { PromotionSimulationResult } from "@/backend/lib/services/batchPromotionEngine";
 import AdminPasswordVerificationModal from "@/frontend/components/settings/AdminPasswordVerificationModal";
 
 interface BatchItem {

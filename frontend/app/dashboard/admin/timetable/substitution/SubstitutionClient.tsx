@@ -35,7 +35,7 @@ import {
   type AbsentPeriodSlot,
   type StaffShiftPeriodSlot
 } from "@/backend/api/actions/dashboard/admin/substitution/substitutionActions";
-import { formatSchoolDate } from "@/backend/lib/timetable/getEffectiveTimetable";
+import { formatSchoolDate } from "@/lib/time";
 import { useConfirm } from "@/frontend/components/ui/ConfirmDialog";
 
 interface TeacherItem {
