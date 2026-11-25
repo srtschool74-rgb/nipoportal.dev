@@ -1,32 +1,10 @@
 import { prisma } from "@/backend/db/prisma";
 import { getDayScholarWhere } from "@/backend/lib/transport/dayScholarHelper";
-import { roundOneDecimal } from "./academics";
+import { computeBusSeatMetrics } from "./transportMetrics";
 import { withShortStatsCache } from "./cache";
 import { BusFleetSummary } from "./types";
 
-/**
- * Computes Bus capacity, assigned Day Scholars, available seats, and occupancy.
- * Strictly includes only active Day Scholars (never HOSTEL or inactive students).
- */
-export function computeBusSeatMetrics(capacity: number, assignedDayScholars: number): {
-  capacity: number;
-  assigned: number;
-  availableSeats: number;
-  occupancyPercentage: number;
-} {
-  const safeCap = Math.max(0, Number(capacity) || 0);
-  const safeAssigned = Math.max(0, Number(assignedDayScholars) || 0);
-  const availableSeats = Math.max(0, safeCap - safeAssigned);
-  const occupancyPercentage =
-    safeCap > 0 ? Math.min(100, roundOneDecimal((safeAssigned / safeCap) * 100)) : 0;
-
-  return {
-    capacity: safeCap,
-    assigned: safeAssigned,
-    availableSeats,
-    occupancyPercentage,
-  };
-}
+export { computeBusSeatMetrics };
 
 /**
  * Single Source of Truth: Fleet-wide Transport & Day-Scholar summary from DB aggregates.

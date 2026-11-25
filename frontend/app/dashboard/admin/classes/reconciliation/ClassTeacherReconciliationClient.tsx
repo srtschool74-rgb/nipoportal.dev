@@ -93,13 +93,22 @@ export default function ClassTeacherReconciliationClient({ initialData }: Props)
             </div>
           </div>
 
-          <Link
-            href="/dashboard/admin/classes"
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-semibold min-h-[44px] transition-colors self-start sm:self-auto"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            <span>Back to Classes &amp; Sections</span>
-          </Link>
+          <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+            <Link
+              href="/dashboard/admin/data-check"
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600/10 hover:bg-emerald-600/20 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 text-xs font-semibold min-h-[44px] transition-colors"
+            >
+              <ShieldCheck className="w-4 h-4" />
+              <span>Full Portal Data Check</span>
+            </Link>
+            <Link
+              href="/dashboard/admin/classes"
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-semibold min-h-[44px] transition-colors"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              <span>Back to Classes &amp; Sections</span>
+            </Link>
+          </div>
         </div>
 
         {/* Feedback Alert */}

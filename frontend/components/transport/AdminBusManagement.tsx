@@ -49,7 +49,7 @@ import {
   triggerBusKeypadAction,
 } from "@/backend/api/actions/dashboard/admin/transport/actions";
 import { isDayScholarStudent } from "@/backend/lib/transport/dayScholarHelper";
-import { computeBusSeatMetrics } from "@/backend/services/stats/transport";
+import { computeBusSeatMetrics } from "@/backend/services/stats/transportMetrics";
 
 interface TransportSummaryMetrics {
   totalBuses: number;

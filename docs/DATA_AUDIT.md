@@ -2,7 +2,7 @@
 
 **Audit Date:** 2026-11-25  
 **Environment Audited:** Production Supabase PostgreSQL (`aws-1-ap-northeast-1.pooler.supabase.com`) + Next.js App Router (`app/` & `frontend/app/`)  
-**Status:** Phase 1 Root Cause Investigation Complete (Task 1 & Task 2). Awaiting User Confirmation Before Applying Fixes & Cleanup.
+**Status:** Complete & Verified — Single Stats Layer Deployed, Cleanup Verified (0 Anomalies), 17/17 Automated Tests Passing.
 
 ---
 
@@ -97,3 +97,30 @@ Checking each of the 10 failure categories from Task 2 across the repository:
      - **Recommended action:** Keep all 29 classes and 14 subjects (`114` rows) intact unless you explicitly want any removed via the dry-run cleanup script.
   3. **Everything else (`Students`, `Teachers`, `Parents`, `Staff`, `Buses`, `Exams`, `Marks`, `Attendance`, `Announcements`, `Notifications`):**
      - All **`0` rows** (no leftover demo data).
+
+
+---
+
+## 5. Implementation & Verification Results (2026-11-25)
+
+### A. Before vs. After Live Snapshot (Verified Against PostgreSQL)
+| Metric | Before (Old Live Site) | After (Single Stats Layer) | Dashboard vs. List Parity |
+|---|---|---|---|
+| **Total Students** | Dashboard `0` / Unfiltered mix on Students list | `0` active (`0` total incl. inactive) | Exact parity (`dashboard = listTotals.students = 0`) |
+| **Total Teachers** | Dashboard `0` / Mixed inactive on Teachers list | `0` active (`0` total incl. inactive) | Exact parity (`dashboard = listTotals.teachers = 0`) |
+| **Total Parents** | Dashboard **`1`** vs. Parents page **`0`** | **`0`** (`0` active, `0` enabled) | **Fixed** (`dashboard = listTotals.parents = 0`) |
+| **Total Classes** | `29` (unclarified unit) | `29` active sections across `12` distinct classes (`0` with Class Teacher) | Exact parity between Dashboard & Classes header |
+| **Total Subjects** | `14` distinct (missing `isActive` filter in Dashboard) | `14` distinct active subjects (`114` class-subject allocations) | Exact parity between Dashboard & Subjects header |
+
+### B. Automated Checks & Safe Cleanup Output
+1. **TypeScript (`npx tsc --noEmit`)**: Exit `0` (zero errors across application, stats layer, scripts, and test suites).
+2. **Production Next.js Build (`npm run build` — Next.js `16.3.4` webpack)**: Exit `0`, compiled in `51s`, TypeScript finished in `43s`, `78/78` routes generated including `/dashboard/admin/data-check` and `/api/stats/summary`. Client/server bundle boundary verified cleanly after moving `computeBusSeatMetrics` to `backend/services/stats/transportMetrics.ts`.
+3. **Vitest Formula & Consistency Suite (`npx vitest run`)**:
+   - `2/2` test files passed, **`17/17` tests passed**, `0` skipped, `0` failed (`40.68s`).
+   - `tests/consistency/formulas.test.ts`: `12/12` passed (attendance `0/0` -> `0.0%` & `Asia/Kolkata` boundaries, unified grading/pass-fail/tied-rank math, bus Day Scholar seat math).
+   - `tests/consistency/stats.consistency.test.ts`: `5/5` passed against live PostgreSQL (exact deltas, dashboard-vs-unfiltered-list equality, role scoping, 5-subject exam & Day Scholar transport totals, `readAt = null` unread notification tracking).
+4. **Safe Cleanup Dry-Run (`npx tsx scripts/cleanup-demo-data.ts --dry-run`)**:
+   - Baseline: `activeStudents: 0`, `activeTeachers: 0`, `parentProfiles: 0`, `activeClassSections: 29`, `distinctActiveSubjects: 14`, `adminUsers: 2`.
+   - Integrity anomalies found: `0` (`Super Admin role mismatches: 0`, `Test/demo '@test.*' users: 0`, `Test/demo 'TEST-*' students: 0`, `Orphan PARENT User rows: 0`, `Invalid Bus (non-DayScholar) links: 0`, `Notification isRead/readAt drift: 0`).
+5. **Admin Data Check (`runDataReconciliationCheck()` & `/dashboard/admin/data-check`)**:
+   - Checked against live DB: `0` super admin role mismatches, `0` orphan parent users, `0` invalid bus links, `0` notification drift, `29` expected `CLASS_WITHOUT_TEACHER` advisories (`Class 1 - A` through `Class 12 - D(ARTS)`, pending teacher onboarding).
