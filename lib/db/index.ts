@@ -31,8 +31,8 @@ export function sanitizeConnectionUrl(rawUrl: string): string {
  */
 export async function withDbRetry<T>(
   operation: () => Promise<T>,
-  retries: number = 2,
-  baseDelayMs: number = 250
+  retries: number = 3,
+  baseDelayMs: number = 350
 ): Promise<T> {
   let lastError: unknown;
   for (let attempt = 0; attempt <= retries; attempt++) {
@@ -46,6 +46,7 @@ export async function withDbRetry<T>(
         msg.includes("max clients reached") ||
         msg.includes("Can't reach database server") ||
         msg.includes("Timed out fetching a new connection") ||
+        msg.includes("connection pool") ||
         msg.includes("Server has closed the connection") ||
         msg.includes("P1001") ||
         msg.includes("P1017") ||
@@ -55,7 +56,7 @@ export async function withDbRetry<T>(
         throw err;
       }
 
-      const jitter = Math.floor(Math.random() * 120);
+      const jitter = Math.floor(Math.random() * 200);
       await new Promise((resolve) => setTimeout(resolve, baseDelayMs * (attempt + 1) + jitter));
     }
   }

@@ -20,7 +20,7 @@ function SettingsUnlockGateClientInner({
   initialRemainingMinutes,
   returnUrl = "/dashboard/admin/settings",
   schoolName = "SRT Universal School",
-  logoUrl = "/logo.png",
+  logoUrl = "/logo/srt-logo.svg",
 }: SettingsUnlockGateClientProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -33,6 +33,8 @@ function SettingsUnlockGateClientInner({
   const [remainingMinutes, setRemainingMinutes] = useState<number>(initialRemainingMinutes || 0);
   const [isPending, startTransition] = useTransition();
   const [unlockedSuccess, setUnlockedSuccess] = useState(false);
+  const [imgSrc, setImgSrc] = useState(logoUrl || "/logo/srt-logo.svg");
+  const [imgError, setImgError] = useState(false);
 
   // Live countdown timer if currently locked
   useEffect(() => {
@@ -77,11 +79,10 @@ function SettingsUnlockGateClientInner({
         }
       } else if (res?.success) {
         setUnlockedSuccess(true);
-        // Instant redirect to requested destination
+        // Instant full navigation to requested settings tab
         setTimeout(() => {
-          router.push(effectiveReturnUrl);
-          router.refresh();
-        }, 300);
+          window.location.href = effectiveReturnUrl;
+        }, 200);
       }
     });
   };
@@ -149,14 +150,18 @@ function SettingsUnlockGateClientInner({
               overflow: "hidden",
             }}
           >
-            {logoUrl ? (
-              <Image
-                src={logoUrl}
+            {!imgError ? (
+              <img
+                src={imgSrc}
                 alt={schoolName}
-                width={56}
-                height={56}
-                style={{ objectFit: "contain" }}
-                priority
+                style={{ width: 56, height: 56, objectFit: "contain" }}
+                onError={() => {
+                  if (imgSrc !== "/logo/srt-logo.svg") {
+                    setImgSrc("/logo/srt-logo.svg");
+                  } else {
+                    setImgError(true);
+                  }
+                }}
               />
             ) : (
               <Lock size={32} style={{ color: "#3b82f6" }} />

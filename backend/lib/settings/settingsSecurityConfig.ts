@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
 import { prisma } from "@/backend/db/prisma";
+import { withDbRetry } from "@/lib/db";
 
 // ==========================================
 // CONSTANTS & POLICIES
@@ -72,23 +73,27 @@ export function verifyUnlockToken(token: string): SettingsUnlockPayload | null {
 // ==========================================
 export async function getOrCreateSettingsSecurity() {
   try {
-    let security = await prisma.settingsSecurity.findFirst({
-      orderBy: { updatedAt: "desc" },
-    });
+    let security = await withDbRetry(async () => {
+      return await prisma.settingsSecurity.findFirst({
+        orderBy: { updatedAt: "desc" },
+      });
+    }, 3, 250);
 
     if (!security) {
       // Read initial password from env or fallback safely to default
       const initialPlain = (process.env.SETTINGS_INITIAL_PASSWORD || "srtschool1527").trim();
       const passwordHash = await bcrypt.hash(initialPlain, BCRYPT_SALT_ROUNDS);
-      security = await prisma.settingsSecurity.create({
-        data: {
-          passwordHash,
-          passwordVersion: 1,
-          failedAttempts: 0,
-          lockedUntil: null,
-          updatedByUserId: "SYSTEM_INITIALIZER",
-        },
-      });
+      security = await withDbRetry(async () => {
+        return await prisma.settingsSecurity.create({
+          data: {
+            passwordHash,
+            passwordVersion: 1,
+            failedAttempts: 0,
+            lockedUntil: null,
+            updatedByUserId: "SYSTEM_INITIALIZER",
+          },
+        });
+      }, 3, 250);
     }
 
     return security;

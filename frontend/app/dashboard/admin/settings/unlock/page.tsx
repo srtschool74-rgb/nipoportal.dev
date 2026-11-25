@@ -68,7 +68,7 @@ export default async function AdminSettingsUnlockPage({
       initialRemainingMinutes={remainingMinutes}
       returnUrl={returnUrl}
       schoolName={schoolInfo.SCHOOL_NAME || "SRT Universal School"}
-      logoUrl={schoolInfo.SCHOOL_LOGO || "/logo.png"}
+      logoUrl={schoolInfo.SCHOOL_LOGO || "/logo/srt-logo.svg"}
     />
   );
 }
