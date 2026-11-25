@@ -26,25 +26,45 @@ export default async function AdminSettingsUnlockPage({
   const returnUrl = resolvedParams?.returnUrl || "/dashboard/admin/settings";
 
   // Check if already unlocked
-  const unlockStatus = await isSettingsUnlockedServer();
-  if (unlockStatus.unlocked) {
-    redirect(returnUrl);
+  try {
+    const unlockStatus = await isSettingsUnlockedServer();
+    if (unlockStatus.unlocked) {
+      redirect(returnUrl);
+    }
+  } catch (err: any) {
+    if (err?.digest?.startsWith?.("NEXT_") || err?.digest === "DYNAMIC_SERVER_USAGE") {
+      throw err;
+    }
   }
 
-  const security = await getOrCreateSettingsSecurity();
-  const schoolInfo = await getSchoolInfo(true);
+  let security: any = null;
+  try {
+    security = await getOrCreateSettingsSecurity();
+  } catch (err) {
+    console.error("[SettingsUnlockPage] Failed to get settings security:", err);
+  }
+
+  let schoolInfo: Record<string, string> = {};
+  try {
+    schoolInfo = await getSchoolInfo(true);
+  } catch (err) {
+    console.error("[SettingsUnlockPage] Failed to get school info:", err);
+  }
 
   let remainingMinutes: number | undefined;
-  if (security.lockedUntil && security.lockedUntil.getTime() > Date.now()) {
-    remainingMinutes = Math.max(
-      1,
-      Math.ceil((security.lockedUntil.getTime() - Date.now()) / (60 * 1000))
-    );
+  let initialLockedUntil: string | null = null;
+
+  if (security?.lockedUntil) {
+    const lockTime = new Date(security.lockedUntil).getTime();
+    if (!isNaN(lockTime) && lockTime > Date.now()) {
+      remainingMinutes = Math.max(1, Math.ceil((lockTime - Date.now()) / (60 * 1000)));
+      initialLockedUntil = new Date(lockTime).toISOString();
+    }
   }
 
   return (
     <SettingsUnlockGateClient
-      initialLockedUntil={security.lockedUntil?.toISOString() || null}
+      initialLockedUntil={initialLockedUntil}
       initialRemainingMinutes={remainingMinutes}
       returnUrl={returnUrl}
       schoolName={schoolInfo.SCHOOL_NAME || "SRT Universal School"}
@@ -52,4 +72,3 @@ export default async function AdminSettingsUnlockPage({
     />
   );
 }
-
