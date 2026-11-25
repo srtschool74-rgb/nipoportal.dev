@@ -7,7 +7,6 @@ import {
   CheckCircle2,
   AlertTriangle,
   Clock,
-  Bell,
   Users,
   Shield,
   Loader2,
@@ -17,20 +16,21 @@ import {
 } from "lucide-react";
 import { CakeIcon as Cake } from "@/frontend/components/birthdays/BirthdayIcons";
 import Link from "next/link";
-
-function LanguageIcon({ className = "w-3.5 h-3.5" }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M3 5h12M9 3v2m1.04 9.5A14.953 14.953 0 013 13m1.8-6h11.4M14 9l6 11m0 0l-3-6m3 6h-6" />
-    </svg>
-  );
-}
+import styles from "./BirthdaySettings.module.css";
 import {
   updateBirthdaySettingsAction,
   sendTestBirthdayWishAction,
   triggerSendTodayWishesAction,
 } from "@/backend/api/actions/dashboard/admin/birthdays/actions";
 import BirthdayWishCard from "@/frontend/components/birthdays/BirthdayWishCard";
+
+function LanguageIcon({ style }: { style?: React.CSSProperties }) {
+  return (
+    <svg style={style} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3 5h12M9 3v2m1.04 9.5A14.953 14.953 0 013 13m1.8-6h11.4M14 9l6 11m0 0l-3-6m3 6h-6" />
+    </svg>
+  );
+}
 
 interface BirthdaySettingsClientProps {
   initialSettings: any;
@@ -114,164 +114,161 @@ export default function BirthdaySettingsClient({ initialSettings, dashboardMeta 
   };
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-gray-900 dark:text-white flex items-center gap-2">
-            <Cake className="w-7 h-7 text-amber-500" />
+    <div className={styles.pageContainer}>
+      {/* Header & Actions */}
+      <div className={styles.headerSection}>
+        <div className={styles.headerTitleWrapper}>
+          <h1 className={styles.pageTitle}>
+            <Cake style={{ width: 28, height: 28, color: "#f59e0b" }} />
             Automatic Birthday Wishes
           </h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+          <p className={styles.pageSubtitle}>
             Configure automated daily greetings sent from &quot;SRT School&quot; to students&apos; parents, teachers, staff, admins, and students.
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className={styles.headerActions}>
           <Link
             href="/dashboard/admin/birthdays/missing"
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 shadow-sm"
+            className={styles.btnSecondary}
           >
-            <Users className="w-4 h-4 text-indigo-500" />
+            <Users style={{ width: 16, height: 16, color: "#6366f1" }} />
             Missing DOB Records
-            <ExternalLink className="w-3.5 h-3.5 text-gray-400" />
+            <ExternalLink style={{ width: 14, height: 14, opacity: 0.7 }} />
           </Link>
 
           <button
             type="button"
             onClick={handleTriggerNow}
             disabled={isTriggeringNow}
-            className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-semibold rounded-lg bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white shadow-sm transition-colors"
+            className={styles.btnTrigger}
             title="Immediately evaluate and send birthday wishes for today"
           >
-            {isTriggeringNow ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+            {isTriggeringNow ? <Loader2 style={{ width: 16, height: 16 }} className="animate-spin" /> : <Send style={{ width: 16, height: 16 }} />}
             {isTriggeringNow ? "Evaluating..." : "Trigger Today's Wishes"}
           </button>
 
           <button
             onClick={handleSave}
             disabled={isSaving}
-            className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white shadow-sm transition-colors"
+            className={styles.btnPrimary}
           >
-            {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+            {isSaving ? <Loader2 style={{ width: 16, height: 16 }} className="animate-spin" /> : <Save style={{ width: 16, height: 16 }} />}
             {isSaving ? "Saving..." : "Save Settings"}
           </button>
         </div>
       </div>
 
+      {/* Alert Banners */}
       {triggerResult && (
-        <div className={`p-3.5 rounded-xl border text-xs font-medium flex items-center gap-2 ${
-          triggerResult.startsWith("Error")
-            ? "bg-red-50 dark:bg-red-950/40 border-red-200 dark:border-red-800 text-red-800 dark:text-red-300"
-            : "bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800 text-amber-900 dark:text-amber-300"
-        }`}>
-          <Cake className="w-4 h-4 flex-shrink-0" />
-          {triggerResult}
+        <div className={triggerResult.startsWith("Error") ? styles.alertError : styles.alertInfo}>
+          <Cake style={{ width: 16, height: 16, flexShrink: 0 }} />
+          <span>{triggerResult}</span>
         </div>
       )}
 
       {saveSuccess && (
-        <div className="p-3.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 text-xs font-medium flex items-center gap-2">
-          <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
-          Settings saved successfully. All changes are live.
+        <div className={styles.alertSuccess}>
+          <CheckCircle2 style={{ width: 16, height: 16, flexShrink: 0 }} />
+          <span>Settings saved successfully. All changes are live.</span>
         </div>
       )}
 
       {saveError && (
-        <div className="p-3.5 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-300 text-xs font-medium flex items-center gap-2">
-          <AlertTriangle className="w-4 h-4 flex-shrink-0" />
-          {saveError}
+        <div className={styles.alertError}>
+          <AlertTriangle style={{ width: 16, height: 16, flexShrink: 0 }} />
+          <span>{saveError}</span>
         </div>
       )}
 
-      {/* Main Switch Card */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5 shadow-sm">
-        <div className="flex items-center justify-between">
-          <div className="space-y-0.5">
-            <div className="text-base font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-              Master Birthday Wishes Switch
-              {settings.enabled ? (
-                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300">
-                  Active
-                </span>
-              ) : (
-                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300">
-                  Paused
-                </span>
-              )}
-            </div>
-            <p className="text-xs text-gray-500 dark:text-gray-400">
-              When enabled, the automated system checks daily for birthdays and delivers warm wishes from SRT School.
-            </p>
+      {/* Master Hero Switch Card */}
+      <div className={styles.masterHeroCard}>
+        <div className={styles.masterHeroInfo}>
+          <div className={styles.masterHeroTitleRow}>
+            <h2 className={styles.masterHeroTitle}>Master Birthday Wishes Switch</h2>
+            {settings.enabled ? (
+              <span className={styles.statusPillActive}>
+                <CheckCircle2 style={{ width: 12, height: 12 }} /> Active
+              </span>
+            ) : (
+              <span className={styles.statusPillPaused}>
+                Paused
+              </span>
+            )}
           </div>
-
-          <button
-            type="button"
-            onClick={() => handleToggle("enabled")}
-            className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${settings.enabled ? "bg-indigo-600" : "bg-gray-300 dark:bg-gray-600"
-              }`}
-          >
-            <span
-              className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${settings.enabled ? "translate-x-5" : "translate-x-0"
-                }`}
-            />
-          </button>
+          <p className={styles.masterHeroDesc}>
+            When enabled, the automated system checks daily for birthdays and delivers warm wishes from SRT School.
+          </p>
         </div>
+
+        <button
+          type="button"
+          aria-label="Toggle Master Birthday Wishes Switch"
+          onClick={() => handleToggle("enabled")}
+          className={`${styles.toggleSwitch} ${settings.enabled ? styles.toggleSwitchOn : styles.toggleSwitchOff}`}
+        >
+          <span
+            className={`${styles.toggleHandle} ${settings.enabled ? styles.toggleHandleOn : ""}`}
+          />
+        </button>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left Column: Schedules & Audiences */}
-        <div className="space-y-6">
-          {/* Timing and Language */}
-          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5 shadow-sm space-y-4">
-            <h3 className="text-sm font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-              <Clock className="w-4 h-4 text-indigo-600" />
-              Timing & Language
-            </h3>
+      {/* Main Content Grid: 2 Columns */}
+      <div className={styles.mainGrid}>
+        {/* Left Column: Schedules, Audiences & System Status */}
+        <div className={styles.columnLeft}>
+          {/* Timing and Language Card */}
+          <div className={styles.sectionCard}>
+            <div className={styles.cardHeader}>
+              <h3 className={styles.cardHeaderTitle}>
+                <Clock style={{ width: 18, height: 18, color: "#3b82f6" }} />
+                Timing &amp; Language
+              </h3>
+            </div>
 
-            <div className="space-y-3">
-              <div>
-                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Daily Send Time (Asia/Kolkata IST)
-                </label>
-                <input
-                  type="time"
-                  value={settings.sendTimeLocal || settings.sendTime || "07:00"}
-                  onChange={(e) => {
-                    handleTextChange("sendTimeLocal", e.target.value);
-                    handleTextChange("sendTime", e.target.value);
-                  }}
-                  className="w-full px-3 py-1.5 text-xs rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
-                />
-                <p className="text-[11px] text-gray-400 mt-1">Default: 07:00 AM IST (wishes arrive early morning)</p>
-              </div>
+            <div className={styles.fieldGroup}>
+              <label className={styles.fieldLabel}>
+                Daily Send Time (Asia/Kolkata IST)
+              </label>
+              <input
+                type="time"
+                value={settings.sendTimeLocal || settings.sendTime || "07:00"}
+                onChange={(e) => {
+                  handleTextChange("sendTimeLocal", e.target.value);
+                  handleTextChange("sendTime", e.target.value);
+                }}
+                className={styles.inputControl}
+              />
+              <p className={styles.fieldHelper}>Default: 07:00 AM IST (wishes arrive early morning)</p>
+            </div>
 
-              <div>
-                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1 flex items-center gap-1.5">
-                  <LanguageIcon className="w-3.5 h-3.5 text-indigo-500" />
-                  Language
-                </label>
-                <select
-                  value={settings.language || "EN"}
-                  onChange={(e) => handleTextChange("language", e.target.value)}
-                  className="w-full px-3 py-1.5 text-xs rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
-                >
-                  <option value="EN">English Only</option>
-                  <option value="TA">Tamil Only (தமிழ்)</option>
-                  <option value="BOTH">Bilingual (English + Tamil)</option>
-                </select>
-              </div>
+            <div className={styles.fieldGroup}>
+              <label className={styles.fieldLabel}>
+                <LanguageIcon style={{ width: 15, height: 15, color: "#3b82f6" }} />
+                Language
+              </label>
+              <select
+                value={settings.language || "EN"}
+                onChange={(e) => handleTextChange("language", e.target.value)}
+                className={styles.inputControl}
+              >
+                <option value="EN">English Only</option>
+                <option value="TA">Tamil Only (தமிழ்)</option>
+                <option value="BOTH">Bilingual (English + Tamil)</option>
+              </select>
             </div>
           </div>
 
-          {/* Audience Toggles */}
-          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5 shadow-sm space-y-4">
-            <h3 className="text-sm font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-              <Users className="w-4 h-4 text-indigo-600" />
-              Target Audiences
-            </h3>
+          {/* Target Audiences Card */}
+          <div className={styles.sectionCard}>
+            <div className={styles.cardHeader}>
+              <h3 className={styles.cardHeaderTitle}>
+                <Users style={{ width: 18, height: 18, color: "#3b82f6" }} />
+                Target Audiences
+              </h3>
+            </div>
 
-            <div className="space-y-3">
+            <div className={styles.toggleRowList}>
               {[
                 {
                   key: "notifyParents",
@@ -329,92 +326,97 @@ export default function BirthdaySettingsClient({ initialSettings, dashboardMeta 
                   desc: "Teacher date changes must be approved in Admin Approval Log",
                 },
               ].map((item) => (
-                <div key={item.key} className="flex items-start justify-between py-1">
-                  <div>
-                    <div className="text-xs font-medium text-gray-900 dark:text-white">{item.label}</div>
-                    <div className="text-[11px] text-gray-400">{item.desc}</div>
+                <div key={item.key} className={styles.toggleRow}>
+                  <div className={styles.toggleRowText}>
+                    <span className={styles.toggleRowLabel}>{item.label}</span>
+                    <span className={styles.toggleRowDesc}>{item.desc}</span>
                   </div>
                   <input
                     type="checkbox"
                     checked={Boolean(settings[item.key])}
                     onChange={() => handleToggle(item.key)}
-                    className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 mt-0.5"
+                    className={styles.miniCheckbox}
                   />
                 </div>
               ))}
             </div>
           </div>
 
-          {/* System Status Box */}
-          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5 shadow-sm space-y-3">
-            <h3 className="text-sm font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-              <Shield className="w-4 h-4 text-emerald-600" />
-              System Status
-            </h3>
+          {/* System Status Card */}
+          <div className={styles.sectionCard}>
+            <div className={styles.cardHeader}>
+              <h3 className={styles.cardHeaderTitle}>
+                <Shield style={{ width: 18, height: 18, color: "#10b981" }} />
+                System Status
+              </h3>
+            </div>
 
-            <div className="space-y-2 text-xs">
-              <div className="flex justify-between items-center py-1 border-b border-gray-100 dark:border-gray-700">
-                <span className="text-gray-500">School Timezone:</span>
-                <span className="font-semibold text-gray-900 dark:text-white">Asia/Kolkata (IST)</span>
+            <div className={styles.statusList}>
+              <div className={styles.statusItem}>
+                <span className={styles.statusItemLabel}>School Timezone</span>
+                <span className={styles.statusItemVal}>Asia/Kolkata (IST)</span>
               </div>
-              <div className="flex justify-between items-center py-1 border-b border-gray-100 dark:border-gray-700">
-                <span className="text-gray-500">Today&apos;s School Date:</span>
-                <span className="font-mono text-gray-900 dark:text-white font-semibold">
+              <div className={styles.statusItem}>
+                <span className={styles.statusItemLabel}>Today&apos;s School Date</span>
+                <span className={styles.statusItemVal} style={{ fontFamily: "monospace" }}>
                   {dashboardMeta.schoolNow.dateString}
                 </span>
               </div>
-              <div className="flex justify-between items-center py-1 border-b border-gray-100 dark:border-gray-700">
-                <span className="text-gray-500">CRON_SECRET Configured:</span>
+              <div className={styles.statusItem}>
+                <span className={styles.statusItemLabel}>CRON_SECRET Configured</span>
                 {dashboardMeta.hasCronSecret ? (
-                  <span className="text-emerald-600 font-semibold flex items-center gap-1">
-                    <CheckCircle2 className="w-3.5 h-3.5" /> Yes
+                  <span style={{ color: "#10b981", fontWeight: 700, display: "inline-flex", alignItems: "center", gap: 4 }}>
+                    <CheckCircle2 style={{ width: 14, height: 14 }} /> Yes
                   </span>
                 ) : (
-                  <span className="text-amber-500 font-semibold flex items-center gap-1">
-                    <AlertTriangle className="w-3.5 h-3.5" /> Not Set
+                  <span style={{ color: "#f59e0b", fontWeight: 700, display: "inline-flex", alignItems: "center", gap: 4 }}>
+                    <AlertTriangle style={{ width: 14, height: 14 }} /> Not Set
                   </span>
                 )}
               </div>
-              <div className="flex justify-between items-center py-1">
-                <span className="text-gray-500">Idempotency Guarantee:</span>
-                <span className="text-emerald-600 font-medium">1 Wish / Year / Recipient</span>
+              <div className={styles.statusItem}>
+                <span className={styles.statusItemLabel}>Idempotency Guarantee</span>
+                <span style={{ color: "#10b981", fontWeight: 600 }}>1 Wish / Year / Recipient</span>
               </div>
             </div>
 
-            {/* Test Button */}
-            <div className="pt-2 border-t border-gray-100 dark:border-gray-700">
-              <button
-                type="button"
-                onClick={handleSendTest}
-                disabled={isSendingTest}
-                className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 transition-colors"
-              >
-                {isSendingTest ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
-                Send Test Wish to My Account
-              </button>
-              {testResult && (
-                <p className={`text-[11px] mt-2 text-center ${testResult.startsWith("Error") ? "text-red-500" : "text-emerald-600"}`}>
-                  {testResult}
-                </p>
-              )}
-            </div>
+            <button
+              type="button"
+              onClick={handleSendTest}
+              disabled={isSendingTest}
+              className={styles.btnTest}
+            >
+              {isSendingTest ? <Loader2 style={{ width: 15, height: 15 }} className="animate-spin" /> : <Send style={{ width: 15, height: 15 }} />}
+              Send Test Wish to My Account
+            </button>
+            {testResult && (
+              <p style={{
+                fontSize: "0.75rem",
+                marginTop: "0.5rem",
+                textAlign: "center",
+                color: testResult.startsWith("Error") ? "#ef4444" : "#10b981",
+                fontWeight: 600
+              }}>
+                {testResult}
+              </p>
+            )}
           </div>
         </div>
 
-        {/* Right Column: Templates and Live Preview */}
-        <div className="lg:col-span-2 space-y-6">
-          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5 shadow-sm space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Greeting Message Templates</h3>
-                <p className="text-xs text-gray-500 dark:text-gray-400">
-                  Placeholders available: <code className="bg-gray-100 dark:bg-gray-700 px-1 py-0.5 rounded text-[11px]">&#123;name&#125;</code>, <code className="bg-gray-100 dark:bg-gray-700 px-1 py-0.5 rounded text-[11px]">&#123;studentName&#125;</code>, <code className="bg-gray-100 dark:bg-gray-700 px-1 py-0.5 rounded text-[11px]">&#123;className&#125;</code>
+        {/* Right Column: Templates, Card Designer & History */}
+        <div className={styles.columnRight}>
+          <div className={styles.sectionCard}>
+            <div className={styles.cardHeader}>
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}>
+                <h3 className={styles.cardHeaderTitle}>Greeting Message Templates</h3>
+                <p className={styles.fieldHelper}>
+                  Placeholders available: <code className={styles.chip}>&#123;name&#125;</code>, <code className={styles.chip}>&#123;studentName&#125;</code>, <code className={styles.chip}>&#123;className&#125;</code>
                 </p>
               </div>
             </div>
 
             {/* Template Selector Tabs */}
-            <div className="flex border-b border-gray-200 dark:border-gray-700 gap-4 text-xs font-medium">
+            <div className={styles.templateTabBar}>
               {[
                 { id: "CARD", label: "Official Birthday Card" },
                 { id: "STUDENT_PARENT", label: "Student & Parent" },
@@ -424,11 +426,9 @@ export default function BirthdaySettingsClient({ initialSettings, dashboardMeta 
               ].map((tab) => (
                 <button
                   key={tab.id}
+                  type="button"
                   onClick={() => setActiveTemplateTab(tab.id as any)}
-                  className={`pb-2 border-b-2 transition-colors ${activeTemplateTab === tab.id
-                      ? "border-amber-600 text-amber-600 dark:text-amber-400 font-bold"
-                      : "border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400"
-                    }`}
+                  className={`${styles.templateTabBtn} ${activeTemplateTab === tab.id ? styles.templateTabBtnActive : ""}`}
                 >
                   {tab.label}
                 </button>
@@ -437,10 +437,10 @@ export default function BirthdaySettingsClient({ initialSettings, dashboardMeta 
 
             {/* Official Birthday Card Editor & Live Interactive Preview */}
             {activeTemplateTab === "CARD" && (
-              <div className="space-y-5">
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div>
-                    <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
+              <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
+                <div className={styles.gridThree}>
+                  <div className={styles.fieldGroup}>
+                    <label className={styles.fieldLabel}>
                       Correspondent / Sender Name
                     </label>
                     <input
@@ -448,12 +448,12 @@ export default function BirthdaySettingsClient({ initialSettings, dashboardMeta 
                       value={settings.senderName ?? "PRANAV.J"}
                       onChange={(e) => handleTextChange("senderName", e.target.value)}
                       placeholder="e.g. PRANAV.J"
-                      className="w-full px-3 py-1.5 text-xs rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
+                      className={styles.inputControl}
                     />
                   </div>
 
-                  <div>
-                    <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                  <div className={styles.fieldGroup}>
+                    <label className={styles.fieldLabel}>
                       Designation
                     </label>
                     <input
@@ -461,12 +461,12 @@ export default function BirthdaySettingsClient({ initialSettings, dashboardMeta 
                       value={settings.senderDesignation ?? "Correspondent"}
                       onChange={(e) => handleTextChange("senderDesignation", e.target.value)}
                       placeholder="e.g. Correspondent"
-                      className="w-full px-3 py-1.5 text-xs rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
+                      className={styles.inputControl}
                     />
                   </div>
 
-                  <div>
-                    <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                  <div className={styles.fieldGroup}>
+                    <label className={styles.fieldLabel}>
                       Deity / God Name in Prayer
                     </label>
                     <input
@@ -474,45 +474,43 @@ export default function BirthdaySettingsClient({ initialSettings, dashboardMeta 
                       value={settings.deityName ?? "Amman"}
                       onChange={(e) => handleTextChange("deityName", e.target.value)}
                       placeholder="e.g. Amman"
-                      className="w-full px-3 py-1.5 text-xs rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
+                      className={styles.inputControl}
                     />
                   </div>
                 </div>
 
-                <div className="space-y-3">
-                  <div>
-                    <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
-                      Card Message Line 1 (Greeting)
-                    </label>
-                    <input
-                      type="text"
-                      value={settings.cardLine1 ?? "I have great pleasure in conveying my best wishes on the eve of your birthday"}
-                      onChange={(e) => handleTextChange("cardLine1", e.target.value)}
-                      className="w-full px-3 py-1.5 text-xs rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
-                    />
-                  </div>
+                <div className={styles.fieldGroup}>
+                  <label className={styles.fieldLabel}>
+                    Card Message Line 1 (Greeting)
+                  </label>
+                  <input
+                    type="text"
+                    value={settings.cardLine1 ?? "I have great pleasure in conveying my best wishes on the eve of your birthday"}
+                    onChange={(e) => handleTextChange("cardLine1", e.target.value)}
+                    className={styles.inputControl}
+                  />
+                </div>
 
-                  <div>
-                    <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
-                      Card Message Line 2 (Blessings) &bull; Use <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded">&#123;deityName&#125;</code> for deity substitution
-                    </label>
-                    <input
-                      type="text"
-                      value={settings.cardLine2 ?? "My prayers are to {deityName} to bless you with peace, prosperity and happiness"}
-                      onChange={(e) => handleTextChange("cardLine2", e.target.value)}
-                      className="w-full px-3 py-1.5 text-xs rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
-                    />
-                  </div>
+                <div className={styles.fieldGroup}>
+                  <label className={styles.fieldLabel}>
+                    Card Message Line 2 (Blessings) &bull; Use <code className={styles.chip}>&#123;deityName&#125;</code> for deity substitution
+                  </label>
+                  <input
+                    type="text"
+                    value={settings.cardLine2 ?? "My prayers are to {deityName} to bless you with peace, prosperity and happiness"}
+                    onChange={(e) => handleTextChange("cardLine2", e.target.value)}
+                    className={styles.inputControl}
+                  />
                 </div>
 
                 {/* Live Interactive Designed Card Preview */}
-                <div className="pt-2">
-                  <div className="text-[11px] font-semibold text-amber-800 dark:text-amber-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                    <Eye className="w-3.5 h-3.5" />
+                <div className={styles.cardPreviewWrapper}>
+                  <div className={styles.cardPreviewHeader}>
+                    <Eye style={{ width: 14, height: 14 }} />
                     Live Designed Card Preview (Sample Celebrant: Anushka A)
                   </div>
 
-                  <div className="p-3 sm:p-5 rounded-2xl bg-slate-900/10 dark:bg-slate-950/40 border border-amber-500/20 flex justify-center">
+                  <div className={styles.cardPreviewFrame}>
                     <BirthdayWishCard
                       recipientName="Anushka A"
                       classNameLabel="Class 10-A"
@@ -531,11 +529,11 @@ export default function BirthdaySettingsClient({ initialSettings, dashboardMeta 
               </div>
             )}
 
-            {/* Template Editors */}
+            {/* Student & Parent Template */}
             {activeTemplateTab === "STUDENT_PARENT" && (
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+              <div style={{ display: "flex", flexDirection: "column", gap: "1.15rem" }}>
+                <div className={styles.fieldGroup}>
+                  <label className={styles.fieldLabel}>
                     English Message (Sent to Parents)
                   </label>
                   <textarea
@@ -545,12 +543,12 @@ export default function BirthdaySettingsClient({ initialSettings, dashboardMeta 
                       "Dear Parent, SRT School wishes {studentName} a very happy birthday! May this year bring happiness, good health, and abundant success. - SRT Universal School"
                     }
                     onChange={(e) => handleTextChange("parentTemplateEn", e.target.value)}
-                    className="w-full p-2.5 text-xs rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
+                    className={styles.textareaControl}
                   />
                 </div>
 
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                <div className={styles.fieldGroup}>
+                  <label className={styles.fieldLabel}>
                     Tamil Message (தமிழ்)
                   </label>
                   <textarea
@@ -560,20 +558,20 @@ export default function BirthdaySettingsClient({ initialSettings, dashboardMeta 
                       "அன்புள்ள பெற்றோருக்கு, {studentName}-க்கு SRT பள்ளி பிறந்தநாள் நல்வாழ்த்துகளைத் தெரிவித்துக் கொள்கிறது! - SRT Universal School"
                     }
                     onChange={(e) => handleTextChange("parentTemplateTa", e.target.value)}
-                    className="w-full p-2.5 text-xs rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
+                    className={styles.textareaControl}
                   />
                 </div>
 
-                {/* Live Preview Card */}
-                <div className="p-4 rounded-xl bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-950/20 dark:to-orange-950/20 border border-amber-200 dark:border-amber-900/50">
-                  <div className="text-[11px] font-semibold text-amber-800 dark:text-amber-400 uppercase tracking-wider mb-1 flex items-center gap-1.5">
-                    <Eye className="w-3.5 h-3.5" />
+                {/* Live Notification Preview Box */}
+                <div className={styles.notificationPreviewBox}>
+                  <div className={styles.cardPreviewHeader}>
+                    <Eye style={{ width: 14, height: 14 }} />
                     Live Notification Preview (Parent View)
                   </div>
-                  <div className="text-xs font-bold text-gray-900 dark:text-white">
+                  <div className={styles.notificationPreviewTitle}>
                     Happy Birthday, [Student Name]! 🎂
                   </div>
-                  <p className="text-xs text-gray-700 dark:text-gray-300 mt-1 whitespace-pre-line">
+                  <p className={styles.notificationPreviewBody}>
                     {(settings.language === "TA"
                       ? settings.parentTemplateTa
                       : settings.language === "BOTH"
@@ -586,10 +584,11 @@ export default function BirthdaySettingsClient({ initialSettings, dashboardMeta 
               </div>
             )}
 
+            {/* Teacher Template */}
             {activeTemplateTab === "TEACHER" && (
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+              <div style={{ display: "flex", flexDirection: "column", gap: "1.15rem" }}>
+                <div className={styles.fieldGroup}>
+                  <label className={styles.fieldLabel}>
                     English Message (Sent to Teachers)
                   </label>
                   <textarea
@@ -599,12 +598,12 @@ export default function BirthdaySettingsClient({ initialSettings, dashboardMeta 
                       "Dear {name}, SRT School wishes you a very Happy Birthday! Thank you for your dedication and wonderful service to our students. Have a fantastic year ahead! - SRT Universal School"
                     }
                     onChange={(e) => handleTextChange("teacherTemplateEn", e.target.value)}
-                    className="w-full p-2.5 text-xs rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
+                    className={styles.textareaControl}
                   />
                 </div>
 
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                <div className={styles.fieldGroup}>
+                  <label className={styles.fieldLabel}>
                     Tamil Message (தமிழ்)
                   </label>
                   <textarea
@@ -614,16 +613,17 @@ export default function BirthdaySettingsClient({ initialSettings, dashboardMeta 
                       "வணக்கம் {name}, SRT பள்ளி தங்களுக்கு மனமார்ந்த பிறந்தநாள் நல்வாழ்த்துகளைத் தெரிவித்துக் கொள்கிறது! - SRT Universal School"
                     }
                     onChange={(e) => handleTextChange("teacherTemplateTa", e.target.value)}
-                    className="w-full p-2.5 text-xs rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
+                    className={styles.textareaControl}
                   />
                 </div>
               </div>
             )}
 
+            {/* Staff Template */}
             {activeTemplateTab === "STAFF" && (
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+              <div style={{ display: "flex", flexDirection: "column", gap: "1.15rem" }}>
+                <div className={styles.fieldGroup}>
+                  <label className={styles.fieldLabel}>
                     English Message (Sent to Staff)
                   </label>
                   <textarea
@@ -633,16 +633,17 @@ export default function BirthdaySettingsClient({ initialSettings, dashboardMeta 
                       "Dear {name}, SRT School wishes you a very Happy Birthday! Thank you for your valuable support and contribution. - SRT Universal School"
                     }
                     onChange={(e) => handleTextChange("staffTemplateEn", e.target.value)}
-                    className="w-full p-2.5 text-xs rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
+                    className={styles.textareaControl}
                   />
                 </div>
               </div>
             )}
 
+            {/* Admin Template */}
             {activeTemplateTab === "ADMIN" && (
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+              <div style={{ display: "flex", flexDirection: "column", gap: "1.15rem" }}>
+                <div className={styles.fieldGroup}>
+                  <label className={styles.fieldLabel}>
                     English Message (Sent to Administrators)
                   </label>
                   <textarea
@@ -652,53 +653,62 @@ export default function BirthdaySettingsClient({ initialSettings, dashboardMeta 
                       "Dear {name}, SRT School wishes you a very Happy Birthday! Thank you for your leadership and guidance. - SRT Universal School"
                     }
                     onChange={(e) => handleTextChange("adminTemplateEn", e.target.value)}
-                    className="w-full p-2.5 text-xs rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
+                    className={styles.textareaControl}
                   />
                 </div>
               </div>
             )}
           </div>
 
-          {/* Recent Cron Job Execution History */}
-          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5 shadow-sm space-y-3">
-            <h3 className="text-sm font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-              <History className="w-4 h-4 text-indigo-600" />
-              Recent Dispatch Runs
-            </h3>
+          {/* Recent Cron Job Execution History Card */}
+          <div className={styles.sectionCard}>
+            <div className={styles.cardHeader}>
+              <h3 className={styles.cardHeaderTitle}>
+                <History style={{ width: 18, height: 18, color: "#3b82f6" }} />
+                Recent Dispatch Runs
+              </h3>
+            </div>
 
             {dashboardMeta.recentRuns.length === 0 ? (
-              <p className="text-xs text-gray-400 py-3 text-center">
+              <p style={{
+                textAlign: "center",
+                padding: "1.25rem 0",
+                color: "var(--text-muted, #64748b)",
+                fontSize: "0.8125rem",
+                margin: 0
+              }}>
                 No past runs recorded yet. The scheduler will record every daily run here.
               </p>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs text-gray-600 dark:text-gray-300">
-                  <thead className="bg-gray-50 dark:bg-gray-900 text-[11px] uppercase border-b border-gray-200 dark:border-gray-700">
+              <div className={styles.historyTableWrapper}>
+                <table className={styles.historyTable}>
+                  <thead>
                     <tr>
-                      <th className="p-2">Run Date</th>
-                      <th className="p-2">Status</th>
-                      <th className="p-2 text-right">Eligible</th>
-                      <th className="p-2 text-right">Sent</th>
-                      <th className="p-2 text-right">Skipped</th>
+                      <th>Run Date</th>
+                      <th>Status</th>
+                      <th style={{ textAlign: "right" }}>Eligible</th>
+                      <th style={{ textAlign: "right" }}>Sent</th>
+                      <th style={{ textAlign: "right" }}>Skipped</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                  <tbody>
                     {dashboardMeta.recentRuns.map((r: any) => (
                       <tr key={r.id}>
-                        <td className="p-2 font-mono">{r.forDate}</td>
-                        <td className="p-2">
-                          <span
-                            className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${r.failedCount === 0
-                                ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300"
-                                : "bg-amber-100 text-amber-800"
-                              }`}
-                          >
+                        <td style={{ fontFamily: "monospace", fontWeight: 600 }}>{r.forDate}</td>
+                        <td>
+                          <span className={r.failedCount === 0 ? styles.statusPillActive : styles.statusPillPaused}>
                             {r.failedCount === 0 ? "SUCCESS" : "PARTIAL"}
                           </span>
                         </td>
-                        <td className="p-2 text-right">{r.sentCount + (r.skippedAlreadySent || 0) + (r.skippedNoAccount || 0)}</td>
-                        <td className="p-2 text-right font-semibold text-emerald-600">{r.sentCount}</td>
-                        <td className="p-2 text-right text-gray-400">{(r.skippedAlreadySent || 0) + (r.skippedNoAccount || 0)}</td>
+                        <td style={{ textAlign: "right" }}>
+                          {r.sentCount + (r.skippedAlreadySent || 0) + (r.skippedNoAccount || 0)}
+                        </td>
+                        <td style={{ textAlign: "right", fontWeight: 700, color: "#10b981" }}>
+                          {r.sentCount}
+                        </td>
+                        <td style={{ textAlign: "right", color: "var(--text-muted, #64748b)" }}>
+                          {(r.skippedAlreadySent || 0) + (r.skippedNoAccount || 0)}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
