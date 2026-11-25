@@ -7,17 +7,33 @@ const globalForDb = globalThis as unknown as {
 
 /**
  * Sanitizes and optimizes database URLs for serverless environments (e.g. Vercel).
- * Enforces connection_limit=1 per serverless lambda to prevent exhausting Supabase's session pooler limit (15).
+ * - Enforces connection_limit=1 per serverless lambda to prevent exhausting connection pools.
+ * - Automatically rewrites Supabase pooler URLs from port 5432 (session mode, limited to 15 clients)
+ *   to port 6543 (transaction mode pooler) with pgbouncer=true to eliminate EMAXCONNSESSION errors.
  */
 export function sanitizeConnectionUrl(rawUrl: string): string {
   let url = rawUrl;
+
+  // Supabase Supavisor: port 5432 is Session mode (capped at 15 clients).
+  // Port 6543 is Transaction mode (supports thousands of concurrent serverless clients).
+  if (url.includes("pooler.supabase.com:5432")) {
+    url = url.replace("pooler.supabase.com:5432", "pooler.supabase.com:6543");
+  }
+
+  // Transaction pooler (port 6543 / pooler.supabase.com) requires pgbouncer=true in Prisma
+  if (url.includes("6543") || url.includes("pooler.supabase.com") || url.includes("pgbouncer")) {
+    if (!url.includes("pgbouncer=true")) {
+      url += (url.includes("?") ? "&" : "?") + "pgbouncer=true";
+    }
+  }
+
   if (url.includes("connection_limit=")) {
     url = url.replace(/connection_limit=\d+/, "connection_limit=1");
   } else {
     url += (url.includes("?") ? "&" : "?") + "connection_limit=1";
   }
   if (!url.includes("pool_timeout=")) {
-    url += "&pool_timeout=15";
+    url += "&pool_timeout=20";
   }
   if (!url.includes("connect_timeout=")) {
     url += "&connect_timeout=15";

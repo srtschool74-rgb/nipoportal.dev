@@ -1,0 +1,41 @@
+name: Render Backend Keep-Alive
+
+on:
+  schedule:
+    # Run every 5 minutes automatically in GitHub's cloud
+    # (Configurable between 5 and 10 minutes e.g. "*/5 * * * *" or "*/10 * * * *")
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+    inputs:
+      target_url:
+        description: "Target Render Backend URL to Ping (optional override)"
+        required: false
+        default: ""
+
+concurrency:
+  group: render-keep-alive
+  cancel-in-progress: false
+
+jobs:
+  ping-backend:
+    name: Ping Render Backend Health Endpoint
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Execute Keep-Alive Health Ping
+        run: |
+          TARGET="${{ github.event.inputs.target_url || secrets.RENDER_BACKEND_URL || 'https://nipoportal.dev.onrender.com' }}"
+          echo "📡 Executing keep-alive ping to: $TARGET"
+          node keep-alive.js --once "$TARGET"
+        env:
+          PING_TIMEOUT_MS: 40000
+          PING_RETRIES: 2

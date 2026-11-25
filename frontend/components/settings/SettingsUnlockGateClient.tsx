@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Lock, Eye, EyeOff, Loader2, ShieldAlert, ArrowLeft, ShieldCheck } from "lucide-react";
+import SrtLogo from "@/frontend/components/ui/SrtLogo";
 import { unlockSettingsAction } from "@/backend/api/actions/dashboard/admin/settings/securityActions";
 
 interface SettingsUnlockGateClientProps {
@@ -33,8 +34,6 @@ function SettingsUnlockGateClientInner({
   const [remainingMinutes, setRemainingMinutes] = useState<number>(initialRemainingMinutes || 0);
   const [isPending, startTransition] = useTransition();
   const [unlockedSuccess, setUnlockedSuccess] = useState(false);
-  const [imgSrc, setImgSrc] = useState(logoUrl || "/logo/srt-logo.svg");
-  const [imgError, setImgError] = useState(false);
 
   // Live countdown timer if currently locked
   useEffect(() => {
@@ -139,33 +138,19 @@ function SettingsUnlockGateClientInner({
               width: "72px",
               height: "72px",
               margin: "0 auto 1rem",
-              borderRadius: "18px",
-              background: "rgba(59, 130, 246, 0.1)",
-              border: "1px solid rgba(59, 130, 246, 0.25)",
+              borderRadius: "50%",
+              backgroundColor: "#ffffff",
+              border: "2px solid #f2b84b",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              boxShadow: "0 8px 16px -4px rgba(59, 130, 246, 0.2)",
+              boxShadow: "0 4px 14px rgba(0,0,0,0.25)",
               position: "relative",
               overflow: "hidden",
+              padding: "4px",
             }}
           >
-            {!imgError ? (
-              <img
-                src={imgSrc}
-                alt={schoolName}
-                style={{ width: 56, height: 56, objectFit: "contain" }}
-                onError={() => {
-                  if (imgSrc !== "/logo/srt-logo.svg") {
-                    setImgSrc("/logo/srt-logo.svg");
-                  } else {
-                    setImgError(true);
-                  }
-                }}
-              />
-            ) : (
-              <Lock size={32} style={{ color: "#3b82f6" }} />
-            )}
+            <SrtLogo size={52} alt={schoolName} priority />
           </div>
 
           <h1

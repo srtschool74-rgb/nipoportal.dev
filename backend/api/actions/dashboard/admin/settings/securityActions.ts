@@ -180,7 +180,11 @@ export async function unlockSettingsAction(password: string): Promise<{
     return { success: true };
   } catch (error: any) {
     console.error("[unlockSettingsAction] Uncaught Error:", error);
-    return { error: error?.message || "An unexpected error occurred while unlocking settings." };
+    const msg = error?.message || "";
+    if (msg.includes("EMAXCONNSESSION") || msg.includes("max clients reached") || msg.includes("pool_size")) {
+      return { error: "Database connection pool is busy. Please retry in a few seconds." };
+    }
+    return { error: msg || "An unexpected error occurred while unlocking settings." };
   }
 }
 
