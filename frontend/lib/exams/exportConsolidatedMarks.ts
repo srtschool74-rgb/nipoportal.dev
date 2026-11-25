@@ -1,3 +1,5 @@
+import { normalizeExamResultLabel } from "@/backend/services/stats/academics";
+
 export interface ConsolidatedExportSubject {
   id: string;
   subjectName: string;
@@ -75,8 +77,9 @@ export async function exportConsolidatedMarksToExcel(
       }
     }
 
+    const normalizedResult = normalizeExamResultLabel(s.result);
     if (studentAppeared) appearedCount++;
-    if (s.result === "PASS") passedCount++;
+    if (normalizedResult === "PASS") passedCount++;
     else failedCount++;
 
     totalScoreSum += s.totalObtained;
@@ -86,7 +89,7 @@ export async function exportConsolidatedMarksToExcel(
       s.totalObtained,
       Number(s.percentage.toFixed(1)),
       s.grade || "-",
-      s.result,
+      normalizedResult,
       s.rank > 0 ? s.rank : "-",
       s.attendance || "-"
     );
@@ -94,8 +97,8 @@ export async function exportConsolidatedMarksToExcel(
   });
 
   // 4. Footer Block Statistics
-  const passPercent = students.length > 0 ? ((passedCount / students.length) * 100).toFixed(1) + "%" : "0%";
-  const classAvg = students.length > 0 ? (totalScoreSum / students.length).toFixed(1) : "0";
+  const passPercent = students.length > 0 ? ((passedCount / students.length) * 100).toFixed(1) + "%" : "0.0%";
+  const classAvg = students.length > 0 ? (totalScoreSum / students.length).toFixed(1) : "0.0";
 
   const footer: any[] = [
     [],

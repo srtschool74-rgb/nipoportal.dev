@@ -1,8 +1,11 @@
 import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
 import { prisma } from "@/backend/db/prisma";
+import { computeClassExamAnalytics, getUnifiedReportCardGrade, roundOneDecimal } from "@/backend/services/stats";
 import styles from "../../dashboard.module.css";
 import PerformanceClient from "./PerformanceClient";
+
+export const dynamic = "force-dynamic";
 
 export default async function AdminPerformancePage({
   searchParams,
@@ -42,78 +45,116 @@ export default async function AdminPerformancePage({
     }
   });
 
-  // Calculate pass/fail per class for school-wide overview
-  const classStats: { [key: string]: { pass: number; fail: number; name: string } } = {};
-  
-  // Calculate Grade Distribution for Pie Chart (Current Selection)
-  let a = 0, b = 0, c = 0, d = 0, f = 0;
-  let totalScore = 0, highest = 0, lowest = 999999;
+  // Compute unified pass/fail, grades, and student rankings via stats layer
+  const analytics = computeClassExamAnalytics(
+    marks.map((m) => ({
+      studentId: m.studentId,
+      subjectId: m.subjectId,
+      score: m.score,
+      maxScore: m.maxScore,
+      remarks: m.remarks,
+      isAbsent: (m.remarks || "").trim().toUpperCase() === "ABSENT",
+      subject: m.subject ? { id: m.subject.id, name: m.subject.name, passMarks: m.subject.passMarks } : null,
+    }))
+  );
 
-  // Calculate top performers
-  const studentStats: { [key: string]: { sum: number; max: number; name: string; rollNo: string } } = {};
-
-  marks.forEach(m => {
-    if (m.remarks === 'Absent') return;
-
-    // Class agg (Overview)
+  // Per-class pass/fail rates
+  const classBuckets = new Map<string, { name: string; marks: typeof marks }>();
+  marks.forEach((m) => {
     const cid = m.student.classId;
-    if (cid && !classStats[cid]) {
-      classStats[cid] = { pass: 0, fail: 0, name: `${m.student.class?.name} - ${m.student.class?.section}` };
+    if (!cid) return;
+    const entry = classBuckets.get(cid) || {
+      name: `${m.student.class?.name || ""} - ${m.student.class?.section || ""}`,
+      marks: [],
+    };
+    entry.marks.push(m);
+    classBuckets.set(cid, entry);
+  });
+
+  // Grade distribution across valid subject marks & aggregate student performance
+  const gradeBuckets: Record<string, number> = { "A+": 0, A: 0, "B+": 0, B: 0, C: 0, D: 0, F: 0 };
+  let totalScore = 0;
+  let highest = 0;
+  let lowest = 999999;
+  let validMarksCount = 0;
+  const studentStats: Record<string, { sum: number; max: number; name: string; rollNo: string }> = {};
+
+  marks.forEach((m) => {
+    const isAbsent = (m.remarks || "").trim().toUpperCase() === "ABSENT";
+    if (isAbsent) {
+      gradeBuckets.F++;
+      return;
     }
-    
-    const percent = (m.score / m.maxScore) * 100;
-    const isPass = m.score >= m.subject.passMarks;
 
-    if (cid) {
-      if (isPass) classStats[cid].pass++;
-      else classStats[cid].fail++;
-    }
+    validMarksCount++;
+    const percent = m.maxScore > 0 ? (m.score / m.maxScore) * 100 : 0;
+    const isPass = m.score >= (m.subject?.passMarks ?? 35);
+    const grade = getUnifiedReportCardGrade(percent, !isPass);
+    if (grade in gradeBuckets) gradeBuckets[grade]++;
 
-    // Pie Chart Grade Dist (Current Selection)
-    if (!isPass) f++;
-    else if (percent >= 80) a++;
-    else if (percent >= 70) b++;
-    else if (percent >= 60) c++;
-    else d++;
-
-    // Stats
     totalScore += m.score;
     if (m.score > highest) highest = m.score;
     if (m.score < lowest) lowest = m.score;
 
-    // Student agg
     if (!studentStats[m.studentId]) {
-      studentStats[m.studentId] = { sum: 0, max: 0, name: `${m.student.firstName} ${m.student.lastName}`, rollNo: m.student.rollNumber };
+      studentStats[m.studentId] = {
+        sum: 0,
+        max: 0,
+        name: `${m.student.firstName} ${m.student.lastName}`,
+        rollNo: m.student.rollNumber,
+      };
     }
     studentStats[m.studentId].sum += m.score;
     studentStats[m.studentId].max += m.maxScore;
   });
 
-  const validMarksCount = marks.filter(m => m.remarks !== 'Absent').length;
   if (lowest === 999999) lowest = 0;
 
+  const passedSubjectCount =
+    gradeBuckets["A+"] + gradeBuckets.A + gradeBuckets["B+"] + gradeBuckets.B + gradeBuckets.C + gradeBuckets.D;
+
   const stats = {
-    average: validMarksCount > 0 ? (totalScore / validMarksCount).toFixed(1) : "0.0",
+    average: validMarksCount > 0 ? roundOneDecimal(totalScore / validMarksCount).toFixed(1) : "0.0",
     highest,
     lowest,
-    passPercent: validMarksCount > 0 ? (((a+b+c+d) / validMarksCount) * 100).toFixed(1) : "0.0",
-    failPercent: validMarksCount > 0 ? ((f / validMarksCount) * 100).toFixed(1) : "0.0",
+    passPercent: analytics.totalStudentsAppeared > 0
+      ? analytics.passRatePercentage.toFixed(1)
+      : validMarksCount > 0
+      ? roundOneDecimal((passedSubjectCount / validMarksCount) * 100).toFixed(1)
+      : "0.0",
+    failPercent: analytics.totalStudentsAppeared > 0
+      ? roundOneDecimal(100 - analytics.passRatePercentage).toFixed(1)
+      : validMarksCount > 0
+      ? roundOneDecimal((gradeBuckets.F / validMarksCount) * 100).toFixed(1)
+      : "0.0",
   };
 
   const pieData = [
-    { name: 'A (80%+)', value: a, color: "var(--success)" },
-    { name: 'B (70-79%)', value: b, color: "var(--primary)" },
-    { name: 'C (60-69%)', value: c, color: '#8b5cf6' },
-    { name: 'D (50-59%)', value: d, color: "var(--warning)" },
-    { name: 'F (Fail)', value: f, color: "var(--danger)" },
+    { name: 'A+ (90%+)', value: gradeBuckets["A+"], color: "#10b981" },
+    { name: 'A (80-89%)', value: gradeBuckets.A, color: "var(--success)" },
+    { name: 'B+ (70-79%)', value: gradeBuckets["B+"], color: "#06b6d4" },
+    { name: 'B (60-69%)', value: gradeBuckets.B, color: "var(--primary)" },
+    { name: 'C (50-59%)', value: gradeBuckets.C, color: '#8b5cf6' },
+    { name: 'D (35-49%)', value: gradeBuckets.D, color: "var(--warning)" },
+    { name: 'F (Fail)', value: gradeBuckets.F, color: "var(--danger)" },
   ];
 
   // Convert class stats for overview bar chart
-  const overviewChartData = Object.values(classStats).map(s => {
-    const total = s.pass + s.fail;
+  const overviewChartData = Array.from(classBuckets.values()).map((bucket) => {
+    const classRes = computeClassExamAnalytics(
+      bucket.marks.map((m) => ({
+        studentId: m.studentId,
+        subjectId: m.subjectId,
+        score: m.score,
+        maxScore: m.maxScore,
+        remarks: m.remarks,
+        isAbsent: (m.remarks || "").trim().toUpperCase() === "ABSENT",
+        subject: m.subject ? { id: m.subject.id, name: m.subject.name, passMarks: m.subject.passMarks } : null,
+      }))
+    );
     return {
-      name: s.name,
-      PassPercent: total > 0 ? (s.pass / total) * 100 : 0
+      name: bucket.name,
+      PassPercent: classRes.passRatePercentage,
     };
   });
 
@@ -122,7 +163,7 @@ export default async function AdminPerformancePage({
     .map(s => ({
       name: s.name,
       rollNo: s.rollNo,
-      percentage: s.max > 0 ? (s.sum / s.max) * 100 : 0
+      percentage: s.max > 0 ? roundOneDecimal((s.sum / s.max) * 100) : 0
     }))
     .sort((a, b) => b.percentage - a.percentage)
     .slice(0, 10);

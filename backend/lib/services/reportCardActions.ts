@@ -6,6 +6,7 @@ import { prisma } from "@/backend/db/prisma";
 import { sendStudentReportCardEmail, ReportCardEmailSubjectMark } from "@/backend/lib/services/emailService";
 import { revalidatePath } from "next/cache";
 import { sendInstantPortalNotification } from "@/lib/pushDispatcher";
+import { computeStudentExamResult, invalidateAllStatsCaches } from "@/backend/services/stats";
 
 export async function sendReportCardToParentAction(studentId: string) {
   const session = await getServerSession(getAuthOptions());
@@ -45,49 +46,41 @@ export async function sendReportCardToParentAction(studentId: string) {
     }
 
     // Compute marks summary if any exist
-    let totalScore = 0;
-    let maxTotal = 0;
-    const subjectMarks: ReportCardEmailSubjectMark[] = [];
-    let examName: string | undefined;
+    const latestExamId = student.marks[0]?.examId;
+    const latestExamMarks = latestExamId
+      ? student.marks.filter((m) => m.examId === latestExamId)
+      : [];
+    const examName: string | undefined = latestExamMarks[0]?.exam?.name;
 
-    if (student.marks && student.marks.length > 0) {
-      examName = student.marks[0]?.exam?.name;
-      for (const m of student.marks) {
-        if (m.remarks === 'Absent') {
-          maxTotal += (m.subject?.maxMarks || m.maxScore);
-          subjectMarks.push({
-            subjectName: m.subject?.name || "Subject",
-            score: 0,
-            maxScore: m.maxScore,
-            isFail: true,
-            remarks: "Absent"
-          });
-        } else {
-          totalScore += m.score;
-          maxTotal += m.maxScore;
-          const isFail = m.subject ? m.score < m.subject.passMarks : m.score < 35;
-          subjectMarks.push({
-            subjectName: m.subject?.name || "Subject",
-            score: m.score,
-            maxScore: m.maxScore,
-            isFail,
-            remarks: m.remarks
-          });
-        }
-      }
-    }
+    const subjectMarks: ReportCardEmailSubjectMark[] = latestExamMarks.map((m) => ({
+      subjectName: m.subject?.name || "Subject",
+      score: m.remarks === "Absent" || (m.remarks || "").trim().toUpperCase() === "ABSENT" ? 0 : m.score,
+      maxScore: m.maxScore,
+      isFail:
+        (m.remarks || "").trim().toUpperCase() === "ABSENT" ||
+        (m.subject ? m.score < m.subject.passMarks : m.score < 35),
+      remarks: m.remarks,
+    }));
 
-    const percentage = maxTotal > 0 ? ((totalScore / maxTotal) * 100).toFixed(1) : undefined;
-    let grade: string | undefined;
-    if (percentage) {
-      const p = parseFloat(percentage);
-      if (p >= 90) grade = "A+";
-      else if (p >= 80) grade = "A";
-      else if (p >= 70) grade = "B";
-      else if (p >= 60) grade = "C";
-      else if (p >= 50) grade = "D";
-      else grade = "E";
-    }
+    const evalResult =
+      latestExamMarks.length > 0
+        ? computeStudentExamResult(
+            latestExamMarks.map((m) => ({
+              subjectId: m.subjectId,
+              subjectName: m.subject?.name || "Subject",
+              score: m.score,
+              maxScore: m.maxScore,
+              passMarks: m.subject?.passMarks ?? 35,
+              absent: (m.remarks || "").trim().toUpperCase() === "ABSENT",
+              remarks: m.remarks,
+            }))
+          )
+        : null;
+
+    const totalScore = evalResult ? evalResult.totalMarks : 0;
+    const maxTotal = evalResult ? evalResult.maxTotal : 0;
+    const percentage = evalResult && evalResult.maxTotal > 0 ? evalResult.percentage.toFixed(1) : undefined;
+    const grade = evalResult && evalResult.overallGrade !== "-" ? evalResult.overallGrade : undefined;
 
     const className = student.class ? `${student.class.name} - ${student.class.section}` : "Class";
     const studentFullName = `${student.firstName} ${student.lastName}`.trim();

@@ -4,6 +4,7 @@ import { prisma } from "@/backend/db/prisma";
 import { revalidatePath } from "next/cache";
 import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
+import { invalidateAllStatsCaches } from "@/backend/services/stats";
 
 export interface MarkEntryItem {
   studentId: string;
@@ -365,6 +366,7 @@ export async function saveMarksDraftAction(
 
     revalidatePath(`/dashboard/teacher/exams/tasks/${examSubjectId}`);
     revalidatePath(`/dashboard/teacher/exams/tasks`);
+    await invalidateAllStatsCaches();
 
     return { success: true, count: entries.length };
   } catch (error: unknown) {
@@ -621,6 +623,7 @@ export async function submitMarksToClassTeacherAction(
     revalidatePath(`/dashboard/teacher/exams/${examSubject.examId}/review`);
     revalidatePath(`/dashboard/teacher/exams/${examSubject.examId}`);
     revalidatePath(`/dashboard/teacher/report-cards`);
+    await invalidateAllStatsCaches();
 
     return { success: true, count: validEntries.length, missingCount: missingStudents.length };
   } catch (error: unknown) {
@@ -758,6 +761,7 @@ export async function submitIndividualStudentMarkAction(
     revalidatePath(`/dashboard/teacher/exams/${examSubject.examId}/review`);
     revalidatePath(`/dashboard/teacher/exams/${examSubject.examId}`);
     revalidatePath(`/dashboard/teacher/report-cards`);
+    await invalidateAllStatsCaches();
 
     return {
       success: true,

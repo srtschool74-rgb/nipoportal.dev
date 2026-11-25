@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
 import { dispatchNotification } from "@/lib/dispatcher";
+import { invalidateAllStatsCaches } from "@/backend/services/stats";
 
 export type ExamType = "UNIT_TEST" | "QUARTERLY" | "HALF_YEARLY" | "ANNUAL" | "MODEL" | "OTHER";
 
@@ -198,6 +199,7 @@ export async function createExamRequestWorkflowAction(input: CreateExamRequestIn
     revalidatePath("/dashboard/admin/exams/requests");
     revalidatePath("/dashboard/teacher/exams");
     revalidatePath("/dashboard/teacher/report-cards");
+    await invalidateAllStatsCaches();
 
     return { success: true, requestId: newRequest.id };
   } catch (error: unknown) {
@@ -578,6 +580,7 @@ export async function adminApproveExamRequestWorkflowAction(
     revalidatePath("/dashboard/teacher/exams");
     revalidatePath("/dashboard/teacher/report-cards");
     revalidatePath("/dashboard/parent/exams");
+    await invalidateAllStatsCaches();
 
     return { success: true, examId: result.exam.id };
   } catch (error: unknown) {
@@ -648,6 +651,7 @@ export async function adminRejectExamRequestWorkflowAction(requestId: string, re
     revalidatePath("/dashboard/admin/exams");
     revalidatePath("/dashboard/admin/exams/requests");
     revalidatePath("/dashboard/teacher/exams");
+    await invalidateAllStatsCaches();
 
     return { success: true };
   } catch (error: unknown) {

@@ -8,7 +8,7 @@ import ClassSelector from "./ClassSelector";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { startOfSchoolDay, endOfSchoolDay, getSchoolNow } from "@/lib/time";
-import { getAdminDashboardSummary, getParentStats, summarizeAttendanceRecords } from "@/backend/services/stats";
+import { getAdminDashboardSummary, getParentStats, summarizeAttendanceRecords, computeStudentExamResult } from "@/backend/services/stats";
 import { countSchoolWorkingDays, getEffectiveAcademicYearRange } from "@/backend/lib/services/attendanceCalculation";
 import AdminDashboardStatsGrid from "@/frontend/components/admin/AdminDashboardStatsGrid";
 
@@ -232,9 +232,16 @@ export default async function AdminDashboardPage({
             select: { status: true },
           }).catch(() => []),
           prisma.mark.findMany({
-            where: { student: { classId } },
-            select: { studentId: true, examId: true, score: true, maxScore: true },
-            take: 500,
+            where: { student: { classId, isActive: true } },
+            select: {
+              studentId: true,
+              examId: true,
+              subjectId: true,
+              score: true,
+              maxScore: true,
+              remarks: true,
+              subject: { select: { id: true, name: true, passMarks: true } },
+            },
             orderBy: { createdAt: 'desc' },
           }).catch(() => []),
           getParentStats({ role: "ADMIN" }, { classId }).catch(() => ({
@@ -267,18 +274,26 @@ export default async function AdminDashboardPage({
         let passCount = 0;
         let failCount = 0;
 
-        const studentExams = new Map();
-        marks.forEach(m => {
+        const studentExams = new Map<string, Array<{ subjectId: string; subjectName: string; score: number; maxScore: number; passMarks: number; absent: boolean; remarks?: string | null }>>();
+        marks.forEach((m) => {
           const key = `${m.studentId}-${m.examId}`;
-          if (!studentExams.has(key)) studentExams.set(key, { total: 0, max: 0 });
-          const curr = studentExams.get(key);
-          curr.total += m.score;
-          curr.max += m.maxScore;
+          const list = studentExams.get(key) || [];
+          const isAbsent = (m.remarks || "").trim().toUpperCase() === "ABSENT";
+          list.push({
+            subjectId: m.subjectId,
+            subjectName: m.subject?.name || "Subject",
+            score: m.score,
+            maxScore: m.maxScore,
+            passMarks: m.subject?.passMarks ?? 35,
+            absent: isAbsent,
+            remarks: m.remarks,
+          });
+          studentExams.set(key, list);
         });
 
-        studentExams.forEach((val) => {
-          const percent = (val.total / (val.max || 1)) * 100;
-          if (percent >= 40) passCount++;
+        studentExams.forEach((subjectsList) => {
+          const res = computeStudentExamResult(subjectsList);
+          if (res.result === "PASS") passCount++;
           else failCount++;
         });
 

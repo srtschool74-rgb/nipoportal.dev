@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
 import { dispatchNotification } from "@/lib/dispatcher";
+import { invalidateAllStatsCaches } from "@/backend/services/stats";
 
 /**
  * Helper to authenticate Class Teacher or Admin
@@ -399,6 +400,7 @@ export async function verifySubjectMarksAction(examSubjectId: string) {
     revalidatePath(`/dashboard/teacher/exams/${examSubject.examId}/review`);
     revalidatePath(`/dashboard/teacher/exams/tasks/${examSubjectId}`);
     revalidatePath(`/dashboard/teacher/report-cards`);
+    await invalidateAllStatsCaches();
 
     return { success: true };
   } catch (error: unknown) {
@@ -474,6 +476,7 @@ export async function returnSubjectMarksAction(examSubjectId: string, reason: st
     revalidatePath(`/dashboard/teacher/exams/${examSubject.examId}/review`);
     revalidatePath(`/dashboard/teacher/exams/tasks/${examSubjectId}`);
     revalidatePath(`/dashboard/teacher/report-cards`);
+    await invalidateAllStatsCaches();
 
     return { success: true };
   } catch (error: unknown) {
@@ -561,6 +564,7 @@ export async function bulkVerifyAllSubmittedSubjectsAction(examId: string) {
 
     revalidatePath(`/dashboard/teacher/exams/${examId}/review`);
     revalidatePath(`/dashboard/teacher/report-cards`);
+    await invalidateAllStatsCaches();
 
     return { success: true, count: submittedSubjects.length };
   } catch (error: unknown) {
@@ -659,6 +663,7 @@ export async function updateSingleMarkAuditAction(input: {
     });
 
     revalidatePath(`/dashboard/teacher/exams/${examSubject.examId}/review`);
+    await invalidateAllStatsCaches();
     return { success: true };
   } catch (error: unknown) {
     console.error("updateSingleMarkAuditAction error:", error);
@@ -842,6 +847,7 @@ export async function publishExamToReportCardsAction(examId: string) {
     revalidatePath(`/dashboard/teacher/report-cards`);
     revalidatePath(`/dashboard/parent/exams`);
     revalidatePath(`/dashboard/parent/report-cards`);
+    await invalidateAllStatsCaches();
 
     return { success: true, studentCount: students.length };
   } catch (error: unknown) {

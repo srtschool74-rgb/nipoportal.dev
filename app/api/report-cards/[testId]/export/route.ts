@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
 import { prisma } from "@/backend/db/prisma";
+import { normalizeExamResultLabel } from "@/backend/services/stats";
 import * as XLSX from "xlsx";
 import PDFDocument from "pdfkit";
 import path from "path";
@@ -156,12 +157,18 @@ export async function GET(
           }
         });
 
+        const normalizedRes = rc.result
+          ? normalizeExamResultLabel(rc.result)
+          : rc.subjectMarks.every((m) => !m.absent && m.status !== "FAIL" && m.status !== "ABSENT") && rc.percentage >= 35
+          ? "PASS"
+          : "FAIL";
+
         row.push(
           rc.totalMarks,
           rc.maxTotal || (subjectsList.length * 100),
-          rc.percentage,
+          Number(rc.percentage.toFixed(1)),
           rc.overallGrade || rc.grade,
-          rc.result || (rc.percentage >= 35 ? "PASS" : "FAIL"),
+          normalizedRes,
           rc.rank || "-",
           rc.attendance || "-"
         );
@@ -169,15 +176,15 @@ export async function GET(
         totalSum += rc.totalMarks;
         if (rc.totalMarks > highestScore) highestScore = rc.totalMarks;
         if (rc.totalMarks < lowestScore) lowestScore = rc.totalMarks;
-        if (rc.result === "PASS" || rc.percentage >= 35) passCount++;
+        if (normalizedRes === "PASS") passCount++;
         else failCount++;
 
         dataRows.push(row);
       });
 
       const totalStudents = exam.reportCards.length;
-      const classAvg = totalStudents > 0 ? (totalSum / totalStudents).toFixed(1) : "0";
-      const passRate = totalStudents > 0 ? ((passCount / totalStudents) * 100).toFixed(1) + "%" : "0%";
+      const classAvg = totalStudents > 0 ? (totalSum / totalStudents).toFixed(1) : "0.0";
+      const passRate = totalStudents > 0 ? ((passCount / totalStudents) * 100).toFixed(1) + "%" : "0.0%";
       if (lowestScore === 999999) lowestScore = 0;
 
       const wsClass = XLSX.utils.aoa_to_sheet([

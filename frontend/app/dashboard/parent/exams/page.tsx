@@ -4,6 +4,7 @@ import styles from "../../dashboard.module.css";
 import { BookOpen, Calendar as CalendarIcon } from "lucide-react";
 import { getSystemSetting } from "@/backend/api/actions/dashboard/admin/settings/actions";
 import { getParentAndSelectedChild } from "../parentChildHelper";
+import { computeClassExamAnalytics, computeStudentExamResult } from "@/backend/services/stats";
 import ParentChildBanner from "../ParentChildBanner";
 
 const ExamClassPerformancePieChart = dynamic(
@@ -52,7 +53,7 @@ export default async function ParentExamsPage({
       orderBy: { date: 'desc' },
       include: {
         marks: {
-          select: { score: true, maxScore: true, studentId: true, subjectId: true, subject: { select: { id: true, name: true } } }
+          select: { score: true, maxScore: true, remarks: true, studentId: true, subjectId: true, subject: { select: { id: true, name: true, passMarks: true } } }
         }
       }
     });
@@ -63,7 +64,7 @@ export default async function ParentExamsPage({
       orderBy: { date: 'desc' },
       include: {
         marks: {
-          select: { score: true, maxScore: true, studentId: true, subjectId: true, subject: { select: { id: true, name: true } } }
+          select: { score: true, maxScore: true, remarks: true, studentId: true, subjectId: true, subject: { select: { id: true, name: true, passMarks: true } } }
         }
       }
     });
@@ -114,59 +115,43 @@ export default async function ParentExamsPage({
 
     if (lastExamWithMarks.marks.length > 0) {
       hasExamData = true;
+      const analytics = computeClassExamAnalytics(
+        lastExamWithMarks.marks.map((m) => ({
+          studentId: m.studentId,
+          subjectId: m.subjectId,
+          score: m.score,
+          maxScore: m.maxScore,
+          remarks: m.remarks,
+          isAbsent: (m.remarks || "").trim().toUpperCase() === "ABSENT",
+          subject: m.subject ? { id: m.subject.id, name: m.subject.name, passMarks: m.subject.passMarks } : null,
+        }))
+      );
+      classOverallPercentage = analytics.classOverallPercentage;
+      totalStudentsAppeared = analytics.totalStudentsAppeared;
+      passedStudents = analytics.passedStudents;
+      failedStudents = analytics.failedStudents;
+      passRatePercentage = analytics.passRatePercentage;
 
-      // Class total score & max score
-      const classTotalScore = lastExamWithMarks.marks.reduce((acc, m) => acc + m.score, 0);
-      const classTotalMax = lastExamWithMarks.marks.reduce((acc, m) => acc + m.maxScore, 0);
-      classOverallPercentage = classTotalMax > 0 
-        ? Number(((classTotalScore / classTotalMax) * 100).toFixed(1)) 
-        : 0;
-
-      // Group marks by student for pass/fail calculation
-      const studentMap = new Map<string, { score: number; maxScore: number }>();
-      lastExamWithMarks.marks.forEach(m => {
-        const cur = studentMap.get(m.studentId) || { score: 0, maxScore: 0 };
-        cur.score += m.score;
-        cur.maxScore += m.maxScore;
-        studentMap.set(m.studentId, cur);
-      });
-
-      totalStudentsAppeared = studentMap.size;
-      studentMap.forEach(s => {
-        const pct = s.maxScore > 0 ? (s.score / s.maxScore) * 100 : 0;
-        if (pct >= 40) {
-          passedStudents++;
-        } else {
-          failedStudents++;
-        }
-      });
-
-      passRatePercentage = totalStudentsAppeared > 0 
-        ? Number(((passedStudents / totalStudentsAppeared) * 100).toFixed(1)) 
-        : 0;
-
-      // Child's specific score on this test
-      const childMarks = lastExamWithMarks.marks.filter(m => m.studentId === selectedChild.id);
+      const childMarks = lastExamWithMarks.marks.filter((m) => m.studentId === selectedChild.id);
       if (childMarks.length > 0) {
-        childScore = childMarks.reduce((acc, m) => acc + m.score, 0);
-        childMaxScore = childMarks.reduce((acc, m) => acc + m.maxScore, 0);
-        childPercentage = childMaxScore > 0 
-          ? Number(((childScore / childMaxScore) * 100).toFixed(1)) 
-          : 0;
+        const childRes = computeStudentExamResult(
+          childMarks.map((m) => ({
+            subjectId: m.subjectId,
+            subjectName: m.subject?.name || "Subject",
+            score: m.score,
+            maxScore: m.maxScore,
+            passMarks: m.subject?.passMarks ?? 35,
+            absent: (m.remarks || "").trim().toUpperCase() === "ABSENT",
+            remarks: m.remarks,
+          }))
+        );
+        childScore = childRes.totalMarks;
+        childMaxScore = childRes.maxTotal;
+        childPercentage = childRes.percentage;
       }
 
-      // Subject performance breakdown
-      const subjectMap = new Map<string, { name: string; score: number; maxScore: number }>();
-      lastExamWithMarks.marks.forEach(m => {
-        const cur = subjectMap.get(m.subjectId) || { name: m.subject.name, score: 0, maxScore: 0 };
-        cur.score += m.score;
-        cur.maxScore += m.maxScore;
-        subjectMap.set(m.subjectId, cur);
-      });
-
-      subjectMap.forEach(sub => {
-        const pct = sub.maxScore > 0 ? Number(((sub.score / sub.maxScore) * 100).toFixed(1)) : 0;
-        subjectBreakdown.push({ name: sub.name, avgPercentage: pct });
+      analytics.subjectBreakdown.forEach((sub) => {
+        subjectBreakdown.push({ name: sub.name, avgPercentage: sub.avgPercentage });
       });
     }
   }

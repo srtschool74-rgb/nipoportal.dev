@@ -2,6 +2,12 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { getAuthOptions } from "@/backend/auth/authOptions";
 import { prisma } from '@/backend/db/prisma';
+import {
+  computeStudentExamResult,
+  getStudentAttendanceSummary,
+  getUnifiedReportCardGrade,
+  normalizeExamResultLabel,
+} from '@/backend/services/stats';
 import PDFDocument from 'pdfkit';
 import path from 'path';
 import fs from 'fs';
@@ -228,10 +234,22 @@ export async function GET(req: Request) {
               rowX += subColW;
             });
 
-            const tot = rc?.totalMarks ?? stMarks.reduce((acc, m) => acc + (m.score || 0), 0);
-            const pct = rc?.percentage ?? (subjects.length > 0 ? (tot / (subjects.length * 100)) * 100 : 0);
-            const gr = rc?.overallGrade || rc?.grade || (pct >= 90 ? 'A+' : pct >= 80 ? 'A' : pct >= 70 ? 'B+' : pct >= 60 ? 'B' : pct >= 50 ? 'C' : pct >= 35 ? 'D' : 'F');
-            const res = rc?.result || (pct >= 35 ? 'PASS' : 'FAIL');
+            const fallbackEval = computeStudentExamResult(
+              stMarks.map((m) => ({
+                subjectId: m.subjectId,
+                subjectName: m.subject?.name || "Subject",
+                score: m.score,
+                maxScore: m.maxScore || 100,
+                passMarks: m.subject?.passMarks ?? 35,
+                absent: (m.remarks || "").trim().toUpperCase() === "ABSENT",
+                remarks: m.remarks,
+              }))
+            );
+
+            const tot = rc?.totalMarks ?? fallbackEval.totalMarks;
+            const pct = rc?.percentage ?? fallbackEval.percentage;
+            const res = rc?.result ? normalizeExamResultLabel(rc.result) : fallbackEval.result;
+            const gr = rc?.overallGrade || rc?.grade || fallbackEval.overallGrade;
             const rnk = rc?.rank ? `#${rc.rank}` : '-';
 
             if (tot > highestTotal) {
@@ -263,8 +281,8 @@ export async function GET(req: Request) {
 
           // Summary Stats Box & Signatures
           const totalStudents = classData.students.length;
-          const passPct = totalStudents > 0 ? ((passCount / totalStudents) * 100).toFixed(1) : '0';
-          const avgScore = validTotalCount > 0 ? (totalScoreSum / validTotalCount).toFixed(1) : '0';
+          const passPct = totalStudents > 0 ? ((passCount / totalStudents) * 100).toFixed(1) : '0.0';
+          const avgScore = validTotalCount > 0 ? (totalScoreSum / validTotalCount).toFixed(1) : '0.0';
 
           y = Math.max(y + 10, 470);
           doc.rect(left, y, 770, 45).fill('#f1f5f9');
@@ -337,10 +355,13 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: 'Data not found' }, { status: 404 });
     }
 
-    const marks = await prisma.mark.findMany({
-      where: { studentId, examId },
-      include: { subject: true }
-    });
+    const [marks, attSummary] = await Promise.all([
+      prisma.mark.findMany({
+        where: { studentId, examId },
+        include: { subject: true }
+      }),
+      getStudentAttendanceSummary(studentId, { classId: student.classId }),
+    ]);
 
     return new Promise<NextResponse>((resolve, reject) => {
       try {
@@ -410,7 +431,7 @@ export async function GET(req: Request) {
         doc.font('Helvetica-Bold').fontSize(9.5).fillColor('#0f172a');
         doc.text(exam.name, 420, 118);
         doc.text(new Date(exam.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }), 420, 138);
-        doc.text(reportCard.attendance || '96%', 420, 158);
+        doc.text(reportCard.attendance || (attSummary.hasWorkingSessions ? `${attSummary.percentage}%` : '-'), 420, 158);
 
         // Subject Marks Table
         const tableTop = 198;
@@ -434,16 +455,27 @@ export async function GET(req: Request) {
 
         let currentY = tableTop + rowHeight;
 
-        // Merge subject marks
+        // Merge subject marks using single grading source of truth
         const subjectsData = marks.map(m => {
           const detail = reportCard.subjectMarks?.find(sm => sm.subjectId === m.subjectId);
+          const maxMarks = detail?.maxMarks || m.maxScore || 100;
+          const passMarks = detail?.passMark ?? m.subject?.passMarks ?? 35;
+          const isAbsent =
+            detail?.absent === true ||
+            (m.remarks || "").trim().toUpperCase() === "ABSENT" ||
+            (detail?.status || "").toUpperCase() === "ABSENT";
+          const score = isAbsent ? 0 : (detail?.marks !== undefined && detail?.marks !== null ? detail.marks : m.score);
+          const subPct = maxMarks > 0 ? (score / maxMarks) * 100 : 0;
+          const grade = isAbsent
+            ? "F"
+            : detail?.grade || getUnifiedReportCardGrade(subPct, score < passMarks);
           return {
             name: m.subject.name,
-            maxMarks: m.maxScore,
-            passMarks: (m as any).passMarks || 35,
-            score: detail?.marks !== undefined && detail?.marks !== null ? detail.marks : m.score,
-            grade: detail?.grade || (m.score >= 90 ? 'A+' : m.score >= 80 ? 'A' : m.score >= 70 ? 'B+' : m.score >= 60 ? 'B' : m.score >= 50 ? 'C' : m.score >= 35 ? 'D' : 'F'),
-            isAbsent: (m as any).remarks === 'Absent' || (detail as any)?.remarks === 'Absent'
+            maxMarks,
+            passMarks,
+            score,
+            grade,
+            isAbsent,
           };
         });
 
@@ -475,9 +507,14 @@ export async function GET(req: Request) {
         doc.rect(col1, currentY, 515, 60).fill('#f1f5f9');
         doc.rect(col1, currentY, 515, 60).strokeColor('#cbd5e1').lineWidth(1).stroke();
 
-        const maxTotal = reportCard.maxTotal || (subjectsData.reduce((acc, s) => acc + s.maxMarks, 0) || 500);
-        const overallResult = reportCard.result || (reportCard.percentage >= 35 ? 'PASS' : 'FAIL');
-        const overallGrade = reportCard.overallGrade || reportCard.grade;
+        const maxTotal = reportCard.maxTotal || (subjectsData.reduce((acc, s) => acc + s.maxMarks, 0) || 0);
+        const hasAnyFail = subjectsData.some(s => s.isAbsent || s.score < s.passMarks);
+        const overallResult = reportCard.result
+          ? normalizeExamResultLabel(reportCard.result)
+          : !hasAnyFail && reportCard.percentage >= 35
+          ? 'PASS'
+          : 'FAIL';
+        const overallGrade = reportCard.overallGrade || reportCard.grade || getUnifiedReportCardGrade(reportCard.percentage, hasAnyFail);
 
         doc.fillColor('#475569').font('Helvetica-Bold').fontSize(8);
         doc.text('TOTAL MARKS', col1 + 20, currentY + 12);

@@ -4,6 +4,7 @@ import { prisma } from "@/backend/db/prisma";
 import { revalidatePath } from "next/cache";
 import { normalizeDateToUTC, formatSchoolDate } from "@/backend/lib/timetable/getEffectiveTimetable";
 import { dispatchNotification } from "@/lib/dispatcher";
+import { invalidateAllStatsCaches } from "@/backend/services/stats";
 
 export async function toggleExamPublishAction(examId: string, isPublished: boolean) {
   try {
@@ -15,6 +16,7 @@ export async function toggleExamPublishAction(examId: string, isPublished: boole
     revalidatePath("/dashboard/admin/exams");
     revalidatePath("/dashboard/parent/exams");
     revalidatePath("/dashboard/teacher/exams");
+    await invalidateAllStatsCaches();
     return { success: true };
   } catch (error: unknown) {
     if (error instanceof Error) {
@@ -173,6 +175,7 @@ export async function acceptExamRequest(requestId: string) {
     revalidatePath("/dashboard/parent/exams");
     revalidatePath("/dashboard/parent/timetable");
     revalidatePath("/dashboard/teacher/timetable");
+    await invalidateAllStatsCaches();
 
     return { success: true };
   } catch (error: unknown) {
@@ -218,6 +221,7 @@ export async function declineExamRequest(requestId: string, reason: string) {
     }
 
     revalidatePath("/dashboard/admin/exams");
+    await invalidateAllStatsCaches();
     return { success: true };
   } catch (error: unknown) {
     if (error instanceof Error) {

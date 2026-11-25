@@ -2,6 +2,7 @@
 
 import { prisma } from "@/backend/db/prisma";
 import { revalidatePath } from "next/cache";
+import { invalidateAllStatsCaches } from "@/backend/services/stats";
 
 export async function createExamRequest(formData: FormData) {
   const teacherId = formData.get("teacherId") as string;
@@ -38,6 +39,7 @@ export async function createExamRequest(formData: FormData) {
     });
 
     revalidatePath("/dashboard/teacher/exams");
+    await invalidateAllStatsCaches();
     return { success: true };
   } catch (error: unknown) {
     if (error instanceof Error) {

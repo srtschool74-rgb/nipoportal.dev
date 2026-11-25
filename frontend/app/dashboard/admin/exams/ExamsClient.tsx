@@ -7,6 +7,7 @@ import { toggleExamPublishAction } from "@/backend/api/actions/dashboard/admin/e
 import { Exam, Class, Student, Subject, Mark, ExamRequest, Teacher, User } from "@prisma/client";
 import { BarChart, Bar, Tooltip, ResponsiveContainer, Cell } from "recharts";
 import { acceptExamRequest, declineExamRequest } from "@/backend/api/actions/dashboard/admin/exams/actions";
+import { getUnifiedReportCardGrade } from "@/backend/services/stats/academics";
 import { useConfirm } from "@/frontend/components/ui/ConfirmDialog";
 
 import styles from "./ExamsClient.module.css";
@@ -223,7 +224,8 @@ export default function ExamsClient({ exams, examRequests }: { exams: ExamWithRe
                         {/* Analytics (if any marks entered) */}
                         {marksEnteredCount > 0 && (() => {
                           const subjMarks = exam.marks.filter(m => m.subjectId === subj.id);
-                          
+                          const isAbsentMark = (remarks?: string | null) => (remarks || "").trim().toUpperCase() === "ABSENT";
+
                           let totalScore = 0;
                           let maxS = 0;
                           let minS = 999999;
@@ -231,7 +233,10 @@ export default function ExamsClient({ exams, examRequests }: { exams: ExamWithRe
                           const failingStudents: string[] = [];
 
                           subjMarks.forEach(m => {
-                            if (m.remarks === 'Absent') return;
+                            if (isAbsentMark(m.remarks)) {
+                              failingStudents.push(m.studentId);
+                              return;
+                            }
                             totalScore += m.score;
                             if (m.score > maxS) maxS = m.score;
                             if (m.score < minS) minS = m.score;
@@ -239,28 +244,31 @@ export default function ExamsClient({ exams, examRequests }: { exams: ExamWithRe
                             else failingStudents.push(m.studentId);
                           });
 
-                          const validMarks = subjMarks.filter(m => m.remarks !== 'Absent');
+                          const validMarks = subjMarks.filter(m => !isAbsentMark(m.remarks));
                           if (validMarks.length === 0) return null;
 
                           const avg = totalScore / validMarks.length;
-                          const passPercent = (passes / validMarks.length) * 100;
-                          
-                          // Grade Dist
-                          let a = 0, b = 0, c = 0, d = 0, f = 0;
-                          validMarks.forEach(m => {
-                            const p = (m.score / m.maxScore) * 100;
-                            if (m.score < subj.passMarks) f++;
-                            else if (p >= 80) a++;
-                            else if (p >= 70) b++;
-                            else if (p >= 60) c++;
-                            else d++;
+                          const passPercent = (passes / subjMarks.length) * 100;
+
+                          // Unified Grade Distribution (A+, A, B+, B, C, D, F)
+                          const gCounts: Record<string, number> = { "A+": 0, A: 0, "B+": 0, B: 0, C: 0, D: 0, F: 0 };
+                          subjMarks.forEach(m => {
+                            if (isAbsentMark(m.remarks)) {
+                              gCounts.F++;
+                              return;
+                            }
+                            const p = m.maxScore > 0 ? (m.score / m.maxScore) * 100 : 0;
+                            const grade = getUnifiedReportCardGrade(p, m.score < subj.passMarks);
+                            if (grade in gCounts) gCounts[grade]++;
                           });
                           const distData = [
-                            { name: 'A', count: a, color: "var(--success)" },
-                            { name: 'B', count: b, color: "var(--primary)" },
-                            { name: 'C', count: c, color: '#8b5cf6' },
-                            { name: 'D', count: d, color: "var(--warning)" },
-                            { name: 'F', count: f, color: "var(--danger)" },
+                            { name: 'A+', count: gCounts["A+"], color: "#10b981" },
+                            { name: 'A', count: gCounts.A, color: "var(--success)" },
+                            { name: 'B+', count: gCounts["B+"], color: "#06b6d4" },
+                            { name: 'B', count: gCounts.B, color: "var(--primary)" },
+                            { name: 'C', count: gCounts.C, color: '#8b5cf6' },
+                            { name: 'D', count: gCounts.D, color: "var(--warning)" },
+                            { name: 'F', count: gCounts.F, color: "var(--danger)" },
                           ];
 
                           return (
@@ -269,7 +277,7 @@ export default function ExamsClient({ exams, examRequests }: { exams: ExamWithRe
                                 <div style={{ textAlign: 'center' }}><div style={{ fontSize: '0.75rem', opacity: 0.7 }}>Avg</div><div style={{ fontWeight: 600 }}>{avg.toFixed(1)}</div></div>
                                 <div style={{ textAlign: 'center' }}><div style={{ fontSize: '0.75rem', opacity: 0.7 }}>High</div><div style={{ fontWeight: 600, color: "var(--success)" }}>{maxS}</div></div>
                                 <div style={{ textAlign: 'center' }}><div style={{ fontSize: '0.75rem', opacity: 0.7 }}>Low</div><div style={{ fontWeight: 600, color: "var(--danger)" }}>{minS}</div></div>
-                                <div style={{ textAlign: 'center' }}><div style={{ fontSize: '0.75rem', opacity: 0.7 }}>Pass %</div><div style={{ fontWeight: 600 }}>{passPercent.toFixed(0)}%</div></div>
+                                <div style={{ textAlign: 'center' }}><div style={{ fontSize: '0.75rem', opacity: 0.7 }}>Pass %</div><div style={{ fontWeight: 600 }}>{passPercent.toFixed(1)}%</div></div>
                               </div>
                               
                               <div style={{ height: '100px', width: '100%', marginBottom: '1rem' }}>
@@ -283,8 +291,8 @@ export default function ExamsClient({ exams, examRequests }: { exams: ExamWithRe
                                     </Bar>
                                   </BarChart>
                                 </ResponsiveContainer>
-                                <div style={{ display: 'flex', justifyContent: 'space-around', fontSize: '0.75rem', opacity: 0.7 }}>
-                                  <span>A</span><span>B</span><span>C</span><span>D</span><span>F</span>
+                                <div style={{ display: 'flex', justifyContent: 'space-around', fontSize: '0.72rem', opacity: 0.7 }}>
+                                  <span>A+</span><span>A</span><span>B+</span><span>B</span><span>C</span><span>D</span><span>F</span>
                                 </div>
                               </div>
 

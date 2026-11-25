@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
 import { prisma } from "@/backend/db/prisma";
 import { revalidatePath } from "next/cache";
+import { invalidateAllStatsCaches } from "@/backend/services/stats";
 
 export async function saveMarks(
   examId: string,
@@ -60,6 +61,7 @@ export async function saveMarks(
     }
 
     revalidatePath(`/dashboard/admin/exams/${examId}`);
+    await invalidateAllStatsCaches();
     return { success: true };
   } catch (error: unknown) {
     if (error instanceof Error) {

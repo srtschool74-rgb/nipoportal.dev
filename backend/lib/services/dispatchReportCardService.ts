@@ -5,6 +5,7 @@ import { getAuthOptions } from "@/backend/auth/authOptions";
 import { prisma } from "@/backend/db/prisma";
 import { revalidatePath } from "next/cache";
 import { calculateReportCardGrade } from "@/frontend/lib/constants";
+import { assignTiedRanks, computeStudentExamResult, invalidateAllStatsCaches } from "@/backend/services/stats";
 import { sendStudentReportCardEmail, ReportCardEmailSubjectMark } from "@/backend/lib/services/emailService";
 import { invalidateUserNotifCache } from "@/backend/api/actions/notifications/unifiedNotificationActions";
 import { sendUnifiedNotification } from "@/backend/services/notifications/unifiedNotificationEngine";
@@ -80,68 +81,45 @@ export interface BulkDispatchSummary {
  * Rule: Never trust calculations received from the browser.
  */
 function recomputeStudentCriteriaServer(subjects: DispatchSubjectInput[]) {
-  let totalMarks = 0;
-  let maxTotal = 0;
-  let hasFail = false;
-  let hasMissing = false;
-
-  const processedSubjects = subjects.map((sub) => {
-    const isAbsent = sub.score === "AB" || sub.absent === true;
-    const isNumber = typeof sub.score === "number" && !isNaN(sub.score);
-    const numericScore: number | null = isNumber ? (sub.score as number) : isAbsent ? 0 : null;
-
-    const maxScore = Math.max(1, Number(sub.maxScore) || 100);
-    const passMarks = Math.max(0, Number(sub.passMarks) || 35);
-    const isSubjectFail = isAbsent || (numericScore !== null && numericScore < passMarks);
-
-    if (numericScore === null) {
-      hasMissing = true;
-    } else if (isAbsent) {
-      hasFail = true;
-    } else {
-      totalMarks += numericScore;
-      if (numericScore < passMarks) {
-        hasFail = true;
-      }
-    }
-    maxTotal += maxScore;
-
-    const percentage = numericScore !== null && maxScore > 0 ? (numericScore / maxScore) * 100 : 0;
-    const grade = isAbsent ? "F" : numericScore !== null ? calculateReportCardGrade(percentage, isSubjectFail) : "-";
-    const status = isAbsent ? "ABSENT" : numericScore === null ? "NEEDS_REVIEW" : numericScore >= passMarks ? "PASS" : "FAIL";
-
-    return {
+  const computed = computeStudentExamResult(
+    subjects.map((sub) => ({
       subjectId: sub.subjectId,
       subjectName: sub.subjectName,
-      marks: numericScore,
-      maxMarks: maxScore,
-      passMark: passMarks,
-      grade,
-      status,
-      absent: isAbsent,
-      remark: sub.remarks || null,
-      isFail: isSubjectFail,
-    };
-  });
+      score: sub.score === "AB" || sub.absent ? 0 : (typeof sub.score === "number" ? sub.score : null),
+      maxScore: sub.maxScore,
+      passMarks: sub.passMarks ?? 35,
+      absent: sub.score === "AB" || sub.absent === true,
+      remarks: sub.remarks,
+    }))
+  );
 
-  const percentage = maxTotal > 0 && !hasMissing ? parseFloat(((totalMarks / maxTotal) * 100).toFixed(1)) : 0;
-  const overallGrade = hasMissing ? "-" : calculateReportCardGrade(percentage, hasFail);
-  const result: "PASS" | "FAIL" = hasFail || hasMissing ? "FAIL" : "PASS";
+  const processedSubjects = computed.subjectResults.map((res, idx) => ({
+    subjectId: res.subjectId,
+    subjectName: res.subjectName,
+    marks: res.marks,
+    maxMarks: res.maxMarks,
+    passMark: res.passMark,
+    grade: res.grade,
+    status: res.status,
+    absent: res.absent,
+    remark: subjects[idx]?.remarks || null,
+    isFail: res.isFail,
+  }));
 
   return {
-    totalMarks,
-    maxTotal,
-    percentage,
-    overallGrade,
-    result,
-    hasMissing,
+    totalMarks: computed.totalMarks,
+    maxTotal: computed.maxTotal,
+    percentage: computed.percentage,
+    overallGrade: computed.overallGrade,
+    result: computed.result,
+    hasMissing: computed.hasMissing,
     processedSubjects,
   };
 }
 
 /**
  * Recomputes and updates ranks for all report cards belonging to an exam.
- * Tied totals share the same rank.
+ * Tied totals share the same rank using shared assignTiedRanks helper.
  */
 async function updateExamRanks(examId: string) {
   try {
@@ -153,23 +131,11 @@ async function updateExamRanks(examId: string) {
 
     if (allCards.length === 0) return;
 
-    let currentRank = 1;
-    let previousScore: number | null = null;
-    let sameScoreCount = 0;
-
-    for (let i = 0; i < allCards.length; i++) {
-      const card = allCards[i];
-      if (previousScore !== null && card.totalMarks === previousScore) {
-        sameScoreCount++;
-      } else {
-        currentRank = i + 1;
-        sameScoreCount = 0;
-        previousScore = card.totalMarks;
-      }
-
+    const ranked = assignTiedRanks(allCards);
+    for (const card of ranked) {
       await prisma.reportCard.update({
         where: { id: card.id },
-        data: { rank: currentRank },
+        data: { rank: card.rank },
       });
     }
   } catch (rankErr) {
@@ -592,6 +558,7 @@ export async function dispatchSingleStudentReportCardAction(
     revalidatePath("/dashboard/teacher/report-cards");
     revalidatePath("/dashboard/parent/report-cards");
     revalidatePath("/dashboard/admin/report-cards");
+    await invalidateAllStatsCaches();
 
     return {
       studentId: input.studentId,
