@@ -22,9 +22,13 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
 export default function PwaRegistration() {
   const pathname = usePathname();
   const syncFnRef = useRef<(() => void) | null>(null);
+  const lastSyncRef = useRef<number>(0);
+  const inFlightRef = useRef<boolean>(false);
 
   useEffect(() => {
-    if (syncFnRef.current) {
+    // Only trigger push sync on explicit visibility/focus or initial load with 5-min cooldown
+    // Avoids spawning redundant DB lambdas on every route navigation
+    if (syncFnRef.current && Date.now() - lastSyncRef.current > 5 * 60 * 1000) {
       syncFnRef.current();
     }
   }, [pathname]);
@@ -71,11 +75,23 @@ export default function PwaRegistration() {
           }
         };
 
-        // Self-Healing Push Subscription Helper: Ensures active device subscription is bound to the logged-in user
+        // Self-Healing Push Subscription Helper: Throttled to once per 5 minutes to protect serverless DB pool
         const syncActiveSubscription = async () => {
           if (typeof window === "undefined" || !("Notification" in window) || Notification.permission !== "granted") {
             return;
           }
+          if (typeof document !== "undefined" && document.hidden) {
+            return;
+          }
+          if (inFlightRef.current) {
+            return;
+          }
+          const now = Date.now();
+          if (now - lastSyncRef.current < 5 * 60 * 1000) {
+            return;
+          }
+          inFlightRef.current = true;
+          lastSyncRef.current = now;
 
           try {
             const readyReg = await navigator.serviceWorker.ready;
@@ -135,22 +151,18 @@ export default function PwaRegistration() {
                   deviceName: `${detectedPlatform} PWA`,
                 };
 
-                await Promise.allSettled([
-                  fetch("/api/notifications/push/subscribe", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(subPayload),
-                  }),
-                  fetch("/api/push/subscribe", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(subPayload),
-                  }),
-                ]);
+                // Single canonical subscription endpoint (avoid duplicate parallel lambdas hitting Supabase pooler)
+                await fetch("/api/push/subscribe", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify(subPayload),
+                });
               }
             }
           } catch (err) {
             console.warn("[PWA] Push subscription sync skipped:", err);
+          } finally {
+            inFlightRef.current = false;
           }
         };
 

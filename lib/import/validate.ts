@@ -11,6 +11,7 @@
  */
 
 import { prisma } from "@/backend/db/prisma";
+import { withDbRetry } from "@/lib/db";
 import {
   ColumnMappingItem,
   RawRow,
@@ -228,11 +229,13 @@ async function runValidationPipeline({
   let activeClasses = availableClasses || [];
   if (activeClasses.length === 0 && checkDb) {
     try {
-      activeClasses = await prisma.class.findMany({
-        where: { isActive: true },
-        select: { id: true, name: true, section: true },
-        orderBy: [{ name: "asc" }, { section: "asc" }],
-      });
+      activeClasses = await withDbRetry(() =>
+        prisma.class.findMany({
+          where: { isActive: true },
+          select: { id: true, name: true, section: true },
+          orderBy: [{ name: "asc" }, { section: "asc" }],
+        })
+      );
     } catch (err) {
       console.warn("Could not fetch active classes for import validation:", err);
     }
@@ -570,10 +573,12 @@ async function runValidationPipeline({
         .filter(Boolean);
 
       const dbUsers = allUserIds.length > 0
-        ? await prisma.user.findMany({
-            where: { email: { in: allUserIds } },
-            select: { email: true, role: true },
-          })
+        ? await withDbRetry(() =>
+            prisma.user.findMany({
+              where: { email: { in: allUserIds } },
+              select: { email: true, role: true },
+            })
+          )
         : [];
 
       for (const u of dbUsers) {
@@ -585,20 +590,22 @@ async function runValidationPipeline({
       }
 
       if (role === "TEACHER") {
-        const [dbTeachers, dbParents] = await Promise.all([
-          allPhones.length > 0
-            ? prisma.teacher.findMany({
-                where: { phone: { in: allPhones } },
-                select: { phone: true },
-              })
-            : [],
-          allPhones.length > 0
-            ? prisma.parent.findMany({
-                where: { phone: { in: allPhones } },
-                select: { phone: true },
-              })
-            : [],
-        ]);
+        const [dbTeachers, dbParents] = await withDbRetry(() =>
+          Promise.all([
+            allPhones.length > 0
+              ? prisma.teacher.findMany({
+                  where: { phone: { in: allPhones } },
+                  select: { phone: true },
+                })
+              : [],
+            allPhones.length > 0
+              ? prisma.parent.findMany({
+                  where: { phone: { in: allPhones } },
+                  select: { phone: true },
+                })
+              : [],
+          ])
+        );
 
         for (const t of dbTeachers) {
           if (t.phone) existingDbPhones.add(normalizePhone(t.phone));
@@ -608,15 +615,17 @@ async function runValidationPipeline({
         }
       } else {
         const dbStudents = (allRolls.length > 0 || allAdmissions.length > 0)
-          ? await prisma.student.findMany({
-              where: {
-                OR: [
-                  ...(allRolls.length > 0 ? [{ rollNumber: { in: allRolls } }] : []),
-                  ...(allAdmissions.length > 0 ? [{ admissionNo: { in: allAdmissions } }] : []),
-                ],
-              },
-              select: { rollNumber: true, admissionNo: true },
-            })
+          ? await withDbRetry(() =>
+              prisma.student.findMany({
+                where: {
+                  OR: [
+                    ...(allRolls.length > 0 ? [{ rollNumber: { in: allRolls } }] : []),
+                    ...(allAdmissions.length > 0 ? [{ admissionNo: { in: allAdmissions } }] : []),
+                  ],
+                },
+                select: { rollNumber: true, admissionNo: true },
+              })
+            )
           : [];
 
         for (const s of dbStudents) {

@@ -7,19 +7,59 @@ const globalForDb = globalThis as unknown as {
 
 /**
  * Sanitizes and optimizes database URLs for serverless environments (e.g. Vercel).
- * Enforces a small connection limit (2) to prevent exhausting Supabase's session pooler limit (15).
+ * Enforces connection_limit=1 per serverless lambda to prevent exhausting Supabase's session pooler limit (15).
  */
 export function sanitizeConnectionUrl(rawUrl: string): string {
   let url = rawUrl;
   if (url.includes("connection_limit=")) {
-    url = url.replace(/connection_limit=\d+/, "connection_limit=2");
+    url = url.replace(/connection_limit=\d+/, "connection_limit=1");
   } else {
-    url += (url.includes("?") ? "&" : "?") + "connection_limit=2";
+    url += (url.includes("?") ? "&" : "?") + "connection_limit=1";
+  }
+  if (!url.includes("pool_timeout=")) {
+    url += "&pool_timeout=15";
   }
   if (!url.includes("connect_timeout=")) {
     url += "&connect_timeout=15";
   }
   return url;
+}
+
+/**
+ * Retries a database operation on transient serverless connection/pool exhaustion errors
+ * (e.g. Supabase Supavisor EMAXCONNSESSION / max clients reached).
+ */
+export async function withDbRetry<T>(
+  operation: () => Promise<T>,
+  retries: number = 2,
+  baseDelayMs: number = 250
+): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      return await operation();
+    } catch (err: unknown) {
+      lastError = err;
+      const msg = err instanceof Error ? err.message : String(err);
+      const isTransient =
+        msg.includes("EMAXCONNSESSION") ||
+        msg.includes("max clients reached") ||
+        msg.includes("Can't reach database server") ||
+        msg.includes("Timed out fetching a new connection") ||
+        msg.includes("Server has closed the connection") ||
+        msg.includes("P1001") ||
+        msg.includes("P1017") ||
+        msg.includes("P2024");
+
+      if (!isTransient || attempt === retries) {
+        throw err;
+      }
+
+      const jitter = Math.floor(Math.random() * 120);
+      await new Promise((resolve) => setTimeout(resolve, baseDelayMs * (attempt + 1) + jitter));
+    }
+  }
+  throw lastError;
 }
 
 /**

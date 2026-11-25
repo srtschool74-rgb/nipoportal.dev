@@ -190,6 +190,9 @@ export default function BulkUpload({
       const formData = new FormData();
       formData.append("file", targetFile);
       formData.append("autoFix", String(useAutoFix));
+      if (activeClasses.length > 0) {
+        formData.append("fallbackClasses", JSON.stringify(activeClasses));
+      }
 
       const res = await scanExcelFileAction(formData, type);
       if (!res.success) {
@@ -206,7 +209,10 @@ export default function BulkUpload({
     if (!scanResult) return;
     startTransition(async () => {
       const rawRows = scanResult.rows.map(r => r.data);
-      const res = await revalidateExcelRowsAction(rawRows, type, { autoFix: autoFixEnabled });
+      const res = await revalidateExcelRowsAction(rawRows, type, {
+        autoFix: autoFixEnabled,
+        fallbackClasses: activeClasses,
+      });
       if (res.success && res.result) {
         setScanResult(res.result);
       } else {
@@ -308,7 +314,7 @@ export default function BulkUpload({
         return r.data;
       });
 
-      const res = await revalidateExcelRowsAction(updatedRows, type);
+      const res = await revalidateExcelRowsAction(updatedRows, type, { fallbackClasses: activeClasses });
       if (res.success && res.result) {
         setScanResult(res.result);
       } else {
@@ -330,7 +336,7 @@ export default function BulkUpload({
         return rowData;
       });
 
-      const res = await revalidateExcelRowsAction(updatedRows, type);
+      const res = await revalidateExcelRowsAction(updatedRows, type, { fallbackClasses: activeClasses });
       if (res.success && res.result) {
         setScanResult(res.result);
       } else {
@@ -421,7 +427,10 @@ export default function BulkUpload({
         return updated;
       });
 
-      const res = await revalidateExcelRowsAction(updatedRows, type, { autoFix: true });
+      const res = await revalidateExcelRowsAction(updatedRows, type, {
+        autoFix: true,
+        fallbackClasses: activeClasses,
+      });
       if (res.success && res.result) {
         setScanResult(res.result);
       } else {
@@ -435,7 +444,7 @@ export default function BulkUpload({
     if (!scanResult) return;
     startTransition(async () => {
       const updatedRows = scanResult.rows.filter(r => r.excelRowNumber !== excelRowNumber).map(r => r.data);
-      const res = await revalidateExcelRowsAction(updatedRows, type);
+      const res = await revalidateExcelRowsAction(updatedRows, type, { fallbackClasses: activeClasses });
       if (res.success && res.result) {
         setScanResult(res.result);
       }
@@ -458,7 +467,7 @@ export default function BulkUpload({
         return r.data;
       });
 
-      const res = await revalidateExcelRowsAction(updatedRows, type);
+      const res = await revalidateExcelRowsAction(updatedRows, type, { fallbackClasses: activeClasses });
       if (res.success && res.result) {
         setScanResult(res.result);
       }
@@ -486,7 +495,7 @@ export default function BulkUpload({
         return r.data;
       });
 
-      const res = await revalidateExcelRowsAction(updatedRows, type);
+      const res = await revalidateExcelRowsAction(updatedRows, type, { fallbackClasses: activeClasses });
       if (res.success && res.result) {
         setScanResult(res.result);
       }
@@ -515,7 +524,7 @@ export default function BulkUpload({
         return r.data;
       });
 
-      const res = await revalidateExcelRowsAction(updatedRows, type);
+      const res = await revalidateExcelRowsAction(updatedRows, type, { fallbackClasses: activeClasses });
       if (res.success && res.result) {
         setScanResult(res.result);
         setEditingRow(null);

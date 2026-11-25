@@ -5,6 +5,7 @@ import { getAuthOptions } from "@/backend/auth/authOptions";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/backend/db/prisma";
 import { revalidateImportRows, ImportRole } from "@/lib/import";
+import { withDbRetry } from "@/lib/db";
 import {
   parseAndScanWorkbook,
   validateAndCorrelateBatch,
@@ -70,11 +71,20 @@ export async function scanExcelFileAction(
     const buffer = Buffer.from(arrayBuffer);
     const autoFixRaw = formData.get("autoFix");
     const autoFix = autoFixRaw !== "false";
+    let fallbackClasses: { id: string; name: string; section: string }[] = [];
+    const fallbackRaw = formData.get("fallbackClasses");
+    if (typeof fallbackRaw === "string" && fallbackRaw.trim()) {
+      try {
+        const parsed = JSON.parse(fallbackRaw);
+        if (Array.isArray(parsed)) fallbackClasses = parsed;
+      } catch {}
+    }
+
     const targetType: ImportType = expectedType === "student" 
       ? "STUDENT_PARENT" 
       : (expectedType === "teacher" ? "TEACHER" : "ADMIN");
 
-    const scanResult = await parseAndScanWorkbook(buffer, targetType, { autoFix });
+    const scanResult = await parseAndScanWorkbook(buffer, targetType, { autoFix, fallbackClasses });
 
     if (!scanResult.isValidWorkbook && scanResult.fileError) {
       return { success: false, error: scanResult.fileError, result: scanResult };
@@ -95,7 +105,10 @@ export async function scanExcelFileAction(
 export async function revalidateExcelRowsAction(
   rows: Record<string, any>[],
   expectedType: "student" | "teacher" | "admin",
-  options?: { autoFix?: boolean }
+  options?: {
+    autoFix?: boolean;
+    fallbackClasses?: { id: string; name: string; section: string }[];
+  }
 ): Promise<{ success: boolean; result?: ExcelScanResult; error?: string }> {
   const auth = await verifyAdminAuth();
   if (!auth.authorized) {
@@ -106,11 +119,18 @@ export async function revalidateExcelRowsAction(
     const targetType: ImportType = expectedType === "student" 
       ? "STUDENT_PARENT" 
       : (expectedType === "teacher" ? "TEACHER" : "ADMIN");
-    const availableClasses = await prisma.class.findMany({
-      where: { isActive: true },
-      select: { id: true, name: true, section: true },
-      orderBy: [{ name: "asc" }, { section: "asc" }]
-    });
+    let availableClasses: { id: string; name: string; section: string }[] = options?.fallbackClasses || [];
+    try {
+      availableClasses = await withDbRetry(() =>
+        prisma.class.findMany({
+          where: { isActive: true },
+          select: { id: true, name: true, section: true },
+          orderBy: [{ name: "asc" }, { section: "asc" }]
+        })
+      );
+    } catch (clsErr) {
+      console.warn("[revalidateExcelRowsAction] Using fallback classes due to transient DB note:", clsErr);
+    }
 
     if (targetType === "STUDENT_PARENT" || targetType === "TEACHER") {
       const role: ImportRole = targetType === "TEACHER" ? "TEACHER" : "STUDENT";

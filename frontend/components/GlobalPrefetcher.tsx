@@ -33,7 +33,13 @@ export default function GlobalPrefetcher() {
 
   const warmDatabase = () => {
     try {
-      lastWarmupRef.current = Date.now();
+      const now = Date.now();
+      const lastStored = Number(sessionStorage.getItem("srt_db_warm_ts") || "0");
+      if (now - lastStored < 20 * 60 * 1000) {
+        return; // Already warmed within 20 minutes; avoid opening extra serverless DB connections
+      }
+      sessionStorage.setItem("srt_db_warm_ts", String(now));
+      lastWarmupRef.current = now;
       fetch("/api/warmup", { priority: "low" as any }).catch(() => {});
     } catch {}
   };
@@ -41,10 +47,13 @@ export default function GlobalPrefetcher() {
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    // 1. Warm database connection pooler immediately in background
-    warmDatabase();
+    // 1. Warm database connection pooler only on public login landing (authenticated pages already touch DB)
+    const path = window.location.pathname || "/";
+    if (path === "/" || path.startsWith("/login")) {
+      warmDatabase();
+    }
 
-    // 2. Prefetch role dashboard matching current session
+    // 2. Prefetch ONLY the role dashboard matching current session (never blast all role routes at once)
     getPersistedNativeSession()
       .then((session) => {
         if (session?.role) {
@@ -64,32 +73,7 @@ export default function GlobalPrefetcher() {
       })
       .catch(() => {});
 
-    // 3. Staggered idle prefetching of all core role dashboards
-    const prefetchCoreRoutes = () => {
-      const coreRoutes = [
-        "/dashboard",
-        "/dashboard/teacher",
-        "/dashboard/parent",
-        "/dashboard/admin",
-        "/dashboard/student",
-        "/staff/my-bus",
-        "/login",
-      ];
-
-      coreRoutes.forEach((route, idx) => {
-        setTimeout(() => {
-          safePrefetch(route);
-        }, idx * 120);
-      });
-    };
-
-    if ("requestIdleCallback" in window) {
-      (window as any).requestIdleCallback(prefetchCoreRoutes, { timeout: 2000 });
-    } else {
-      setTimeout(prefetchCoreRoutes, 300);
-    }
-
-    // 4. Anticipatory Hover & Touch Prefetching for all internal links
+    // 3. Anticipatory Hover & Touch Prefetching for all internal links
     const handlePointerOrTouch = (e: Event) => {
       const target = (e.target as HTMLElement)?.closest("a");
       if (!target || !target.href) return;

@@ -1,5 +1,6 @@
 import * as XLSX from "xlsx";
 import { prisma } from "@/backend/db/prisma";
+import { withDbRetry } from "@/lib/db";
 import { hash } from "bcryptjs";
 import {
   readExcelBuffer,
@@ -359,7 +360,10 @@ export function resolveClass(rawClass: string | undefined, classes: { id: string
 export async function parseAndScanWorkbook(
   buffer: Buffer | ArrayBuffer,
   expectedType: ImportType,
-  options?: { autoFix?: boolean }
+  options?: {
+    autoFix?: boolean;
+    fallbackClasses?: { id: string; name: string; section: string }[];
+  }
 ): Promise<ExcelScanResult> {
   // Use new resilient universal import engine for TEACHER and STUDENT_PARENT
   if (expectedType === "TEACHER" || expectedType === "STUDENT_PARENT") {
@@ -378,11 +382,18 @@ export async function parseAndScanWorkbook(
       const targetFields = getTargetFieldsForRole(role);
       const columnMappings = autoMapColumns(parsedData.headers, parsedData.rows, targetFields);
 
-      const availableClasses = await prisma.class.findMany({
-        where: { isActive: true },
-        select: { id: true, name: true, section: true },
-        orderBy: [{ name: "asc" }, { section: "asc" }]
-      });
+      let availableClasses: { id: string; name: string; section: string }[] = options?.fallbackClasses || [];
+      try {
+        availableClasses = await withDbRetry(() =>
+          prisma.class.findMany({
+            where: { isActive: true },
+            select: { id: true, name: true, section: true },
+            orderBy: [{ name: "asc" }, { section: "asc" }]
+          })
+        );
+      } catch (clsErr) {
+        console.warn("[ExcelImportEngine] Using fallback classes during scan due to transient DB note:", clsErr);
+      }
 
       const validatedRows = await validateImportRows({
         role,
@@ -611,12 +622,19 @@ export async function parseAndScanWorkbook(
     }
   }
 
-  // Fetch available classes from database
-  const availableClasses = await prisma.class.findMany({
-    where: { isActive: true },
-    select: { id: true, name: true, section: true },
-    orderBy: [{ name: "asc" }, { section: "asc" }]
-  });
+  // Fetch available classes from database with resilient retry fallback
+  let availableClasses: { id: string; name: string; section: string }[] = options?.fallbackClasses || [];
+  try {
+    availableClasses = await withDbRetry(() =>
+      prisma.class.findMany({
+        where: { isActive: true },
+        select: { id: true, name: true, section: true },
+        orderBy: [{ name: "asc" }, { section: "asc" }]
+      })
+    );
+  } catch (clsErr) {
+    console.warn("[ExcelImportEngine] Fallback class fetch bypassed due to transient DB note:", clsErr);
+  }
 
   // Convert sheet to json rows with row mapping
   const rawObjects = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: "" });
@@ -1394,26 +1412,30 @@ export async function executeImportTransaction(
     createdAccounts: []
   };
 
-  // Create initial ImportBatch log
-  const batch = await prisma.importBatch.create({
-    data: {
-      templateType: type,
-      fileName,
-      fileSize,
-      adminId: admin.id || null,
-      adminEmail: admin.email || null,
-      totalRows: rowsToImport.length,
-      status: "PROCESSING"
-    }
-  });
+  // Create initial ImportBatch log with retry
+  const batch = await withDbRetry(() =>
+    prisma.importBatch.create({
+      data: {
+        templateType: type,
+        fileName,
+        fileSize,
+        adminId: admin.id || null,
+        adminEmail: admin.email || null,
+        totalRows: rowsToImport.length,
+        status: "PROCESSING"
+      }
+    })
+  );
 
   result.batchId = batch.id;
 
   // Pre-fetch classes once outside row loop and auto-create any missing classes referenced in Student import
-  const allDbClasses = await prisma.class.findMany({
-    where: { isActive: true },
-    select: { id: true, name: true, section: true }
-  });
+  const allDbClasses = await withDbRetry(() =>
+    prisma.class.findMany({
+      where: { isActive: true },
+      select: { id: true, name: true, section: true }
+    })
+  );
 
   if (type === "STUDENT_PARENT") {
     for (const r of rowsToImport) {
@@ -1477,10 +1499,12 @@ export async function executeImportTransaction(
   ));
 
   const existingUsers = allCleanEmails.length > 0
-    ? await prisma.user.findMany({
-        where: { email: { in: allCleanEmails } },
-        include: { teacher: true, parent: true }
-      })
+    ? await withDbRetry(() =>
+        prisma.user.findMany({
+          where: { email: { in: allCleanEmails } },
+          include: { teacher: true, parent: true }
+        })
+      )
     : [];
   const existingUserMap = new Map<string, any>(existingUsers.map(u => [u.email.toLowerCase(), u]));
 
