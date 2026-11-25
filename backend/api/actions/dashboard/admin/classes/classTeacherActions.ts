@@ -4,6 +4,7 @@ import { prisma } from "@/backend/db/prisma";
 import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
 import { revalidatePath } from "next/cache";
+import { invalidateAllStatsCaches } from "@/backend/services/stats";
 
 export interface SetClassTeacherOptions {
   confirmReplace?: boolean;
@@ -144,6 +145,7 @@ export async function setClassTeacher(
     revalidatePath("/dashboard/teacher/attendance");
     revalidatePath("/dashboard/teacher/birthdays");
     revalidatePath("/dashboard/teacher/birthdays/missing");
+    await invalidateAllStatsCaches();
 
     return {
       success: true,

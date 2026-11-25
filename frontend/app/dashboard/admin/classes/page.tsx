@@ -1,15 +1,18 @@
 import { getCachedServerSession } from "@/backend/auth/sessionCache";
 import { prisma } from "@/backend/db/prisma";
+import { getClassCounts } from "@/backend/services/stats";
 import styles from "../../dashboard.module.css";
 import ClassListClient from "./ClassListClient";
 import Link from "next/link";
 import { UserCheck, AlertTriangle } from "lucide-react";
 
+export const dynamic = "force-dynamic";
+
 export default async function AdminClassesPage() {
   const session = await getCachedServerSession();
   if (!session || session.user.role !== 'ADMIN') return null;
 
-  const [classes, teachers, discrepancyCount] = await Promise.all([
+  const [classes, teachers, discrepancyCount, classStats] = await Promise.all([
     prisma.class.findMany({
       where: { isActive: true },
       include: {
@@ -43,13 +46,19 @@ export default async function AdminClassesPage() {
         teacherId: { not: null },
         classTeacherId: null
       }
-    })
+    }),
+    getClassCounts({ role: "ADMIN" }),
   ]);
 
   return (
     <div className={styles.dashboard}>
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-4">
-        <h1 className={styles.title} style={{ marginBottom: 0 }}>Classes</h1>
+        <div className="flex items-center flex-wrap gap-3">
+          <h1 className={styles.title} style={{ marginBottom: 0 }}>Classes</h1>
+          <span className="px-3 py-1 text-xs font-semibold rounded-full bg-purple-500/10 text-purple-400 border border-purple-500/20">
+            {classStats.distinctClasses} Class Levels · {classStats.totalSections} Class-Sections
+          </span>
+        </div>
         <Link
           href="/dashboard/admin/classes/reconciliation"
           className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-primary bg-primary/10 hover:bg-primary/20 rounded-xl transition border border-primary/20"

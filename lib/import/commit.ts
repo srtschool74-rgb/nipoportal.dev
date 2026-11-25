@@ -13,6 +13,7 @@ import { prisma } from "@/backend/db/prisma";
 import { BatchImportResult, ImportRole, RowValidationResult } from "./types";
 import { sanitizeForSpreadsheetExport } from "./coerce";
 import { parseClassTeacher, resolveClassSmart } from "./normalizers";
+import { invalidateAllStatsCaches } from "@/backend/services/stats";
 
 /**
  * Commits a batch of validated rows to the database.
@@ -49,6 +50,10 @@ export async function commitImportBatch(
       });
       console.error(`[Import Engine] Error importing row ${excelRow}:`, message);
     }
+  }
+
+  if (result.successfulCount > 0) {
+    await invalidateAllStatsCaches();
   }
 
   return result;

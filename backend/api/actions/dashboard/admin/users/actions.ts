@@ -2,6 +2,7 @@
 
 import { prisma } from "@/backend/db/prisma";
 import { revalidatePath } from "next/cache";
+import { invalidateAllStatsCaches } from "@/backend/services/stats";
 import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
 import { revokeAllUserSessions, getUserActiveSessions } from "@/backend/lib/session-manager";
@@ -23,6 +24,7 @@ export async function deactivateUser(id: string) {
   }
 
   revalidatePath('/dashboard/admin/users');
+  await invalidateAllStatsCaches();
 }
 
 export async function setUserExpiry(id: string, hours: number) {
@@ -34,6 +36,7 @@ export async function setUserExpiry(id: string, hours: number) {
     data: { expiresAt }
   });
   revalidatePath('/dashboard/admin/users');
+  await invalidateAllStatsCaches();
 }
 
 export async function activateUser(id: string) {
@@ -51,6 +54,7 @@ export async function activateUser(id: string) {
   }
 
   revalidatePath('/dashboard/admin/users');
+  await invalidateAllStatsCaches();
 }
 
 export async function activateAllUsers() {
@@ -70,6 +74,7 @@ export async function activateAllUsers() {
   });
 
   revalidatePath('/dashboard/admin/users');
+  await invalidateAllStatsCaches();
 }
 
 export async function deleteUser(id: string) {
@@ -207,6 +212,7 @@ export async function deleteUser(id: string) {
 
     try {
       revalidatePath('/dashboard/admin/users');
+  await invalidateAllStatsCaches();
     } catch {
       // Ignore outside request context
     }

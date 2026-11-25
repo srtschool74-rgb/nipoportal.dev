@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
+import type { TeacherStatsSummary } from "@/backend/services/stats/types";
+import { notifyStatsUpdated } from "@/frontend/hooks/useStatsLiveRefresh";
 import { useRouter } from "next/navigation";
 import {
   Search, Plus, LayoutGrid, List, User, Mail, Phone, BookOpen,
@@ -35,12 +37,14 @@ interface TeacherListClientProps {
   teachers: TeacherData[];
   allClasses: ClassItem[];
   allSubjects: SubjectItem[];
+  teacherStats?: TeacherStatsSummary;
 }
 
 export default function TeacherListClient({
   teachers,
   allClasses,
   allSubjects,
+  teacherStats,
 }: TeacherListClientProps) {
   const router = useRouter();
   const confirm = useConfirm();
@@ -55,7 +59,7 @@ export default function TeacherListClient({
   // Controls & State
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string>("ALL");
+  const [statusFilter, setStatusFilter] = useState<string>("ACTIVE");
   const [subjectFilter, setSubjectFilter] = useState<string[]>([]);
   const [classFilter, setClassFilter] = useState<string[]>([]);
   const [sortBy, setSortBy] = useState<"NAME_ASC" | "NAME_DESC" | "DATE_DESC" | "DATE_ASC" | "STATUS">("NAME_ASC");
@@ -125,9 +129,10 @@ export default function TeacherListClient({
           }
         }
 
-        // Status Filter
-        if (statusFilter === "ACTIVE" && !teacher.isActive) return false;
-        if (statusFilter === "INACTIVE" && teacher.isActive) return false;
+        // Status Filter (matches getTeacherStats: isActive && user.status === "ACTIVE")
+        const isFacultyActive = teacher.isActive && teacher.user?.status === "ACTIVE";
+        if (statusFilter === "ACTIVE" && !isFacultyActive) return false;
+        if (statusFilter === "INACTIVE" && isFacultyActive) return false;
 
         // Subject Filter (Multi-select)
         if (subjectFilter.length > 0) {
@@ -203,6 +208,7 @@ export default function TeacherListClient({
         setTeacherList(previousList);
         alert(res.error);
       } else {
+        notifyStatsUpdated();
         router.refresh();
       }
     } catch (err: any) {
@@ -369,11 +375,34 @@ export default function TeacherListClient({
       <ResultsContainer
         isPending={isPendingSearch}
         isEmpty={filteredAndSortedTeachers.length === 0}
-        emptyTitle="No teachers match criteria"
-        emptyMessage="Try adjusting your search terms or active filters."
+        emptyTitle={teacherList.length === 0 ? "No teachers yet" : "No teachers match criteria"}
+        emptyMessage={
+          teacherList.length === 0
+            ? "No teachers yet. Add teachers from Create New Roles or import an Excel file."
+            : "Try adjusting your search terms or active filters."
+        }
+        emptyAction={
+          <Link
+            href="/dashboard/admin/create-roles/teacher"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "0.4rem",
+              padding: "0.5rem 1.25rem",
+              borderRadius: "8px",
+              background: "var(--primary, #3b82f6)",
+              color: "#ffffff",
+              fontWeight: 600,
+              fontSize: "0.875rem",
+              textDecoration: "none",
+            }}
+          >
+            Add / Import Teachers
+          </Link>
+        }
         onReset={() => {
           setSearchTerm("");
-          setStatusFilter("ALL");
+          setStatusFilter("ACTIVE");
           setSubjectFilter([]);
           setClassFilter([]);
         }}

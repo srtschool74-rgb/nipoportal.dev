@@ -4,6 +4,7 @@ import { prisma } from "@/backend/db/prisma";
 import bcrypt from "bcryptjs";
 import { revalidatePath } from "next/cache";
 import { parseAndValidateDob } from "@/lib/validations/dob";
+import { invalidateAllStatsCaches } from "@/backend/services/stats";
 
 export async function createStaffAction(formData: FormData) {
   try {
@@ -68,6 +69,7 @@ export async function createStaffAction(formData: FormData) {
 
     revalidatePath("/dashboard/admin/users");
     revalidatePath("/dashboard/admin/staff-attendance");
+    await invalidateAllStatsCaches();
     return { success: true };
   } catch (error: unknown) {
     if (error instanceof Error) {

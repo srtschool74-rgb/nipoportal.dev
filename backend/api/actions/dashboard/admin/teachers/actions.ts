@@ -2,6 +2,7 @@
 
 import { prisma } from "@/backend/db/prisma";
 import { revalidatePath } from "next/cache";
+import { invalidateAllStatsCaches } from "@/backend/services/stats";
 
 export async function deactivateTeacher(id: string) {
   try {
@@ -20,6 +21,7 @@ export async function deactivateTeacher(id: string) {
 
     revalidatePath('/dashboard/admin/teachers');
     revalidatePath('/dashboard/admin/users');
+    await invalidateAllStatsCaches();
   } catch (error: unknown) {
     if (error instanceof Error) {
       return { error: error.message || "Failed to deactivate teacher." };
@@ -62,6 +64,7 @@ export async function assignClassTeacher(teacherId: string, classId: string) {
 
     revalidatePath('/dashboard/admin/teachers');
     revalidatePath('/dashboard/admin/classes');
+    await invalidateAllStatsCaches();
     return { success: true };
   } catch (error: unknown) {
     if (error instanceof Error) {
@@ -124,6 +127,7 @@ export async function deleteTeacher(id: string) {
 
     revalidatePath('/dashboard/admin/teachers');
     revalidatePath('/dashboard/admin/users');
+    await invalidateAllStatsCaches();
     return { success: true };
   } catch (error: any) {
     return { error: `Failed to delete teacher: ${error.message || "Unknown error"}` };

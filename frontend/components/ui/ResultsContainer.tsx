@@ -9,6 +9,7 @@ export interface ResultsContainerProps {
   isEmpty?: boolean;
   emptyTitle?: string;
   emptyMessage?: string;
+  emptyAction?: React.ReactNode;
   onReset?: () => void;
   resetLabel?: string;
   error?: string | null;
@@ -23,6 +24,7 @@ export default function ResultsContainer({
   isEmpty = false,
   emptyTitle = "No Results Found",
   emptyMessage = "No records matched your search or active filters. Try adjusting your query.",
+  emptyAction,
   onReset,
   resetLabel = "Clear Search",
   error,
@@ -171,28 +173,31 @@ export default function ResultsContainer({
           <p style={{ color: "var(--text-secondary)", fontSize: "0.9rem", margin: "0 0 1.25rem 0", maxWidth: "420px", marginLeft: "auto", marginRight: "auto" }}>
             {emptyMessage}
           </p>
-          {onReset && (
-            <button
-              type="button"
-              onClick={onReset}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "0.5rem",
-                padding: "0.5rem 1.25rem",
-                borderRadius: "8px",
-                background: "var(--input-bg)",
-                border: "1px solid var(--border)",
-                color: "var(--foreground)",
-                fontWeight: 600,
-                fontSize: "0.875rem",
-                cursor: "pointer",
-                transition: "all 0.15s ease",
-              }}
-            >
-              <span>{resetLabel}</span>
-            </button>
-          )}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "0.75rem", flexWrap: "wrap" }}>
+            {onReset && (
+              <button
+                type="button"
+                onClick={onReset}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "0.5rem",
+                  padding: "0.5rem 1.25rem",
+                  borderRadius: "8px",
+                  background: "var(--input-bg)",
+                  border: "1px solid var(--border)",
+                  color: "var(--foreground)",
+                  fontWeight: 600,
+                  fontSize: "0.875rem",
+                  cursor: "pointer",
+                  transition: "all 0.15s ease",
+                }}
+              >
+                <span>{resetLabel}</span>
+              </button>
+            )}
+            {emptyAction}
+          </div>
         </div>
       )}
 

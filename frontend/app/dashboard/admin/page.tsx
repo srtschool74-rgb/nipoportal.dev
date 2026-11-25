@@ -1,4 +1,4 @@
-import dynamic from "next/dynamic";
+import nextDynamic from "next/dynamic";
 import { getCachedServerSession } from "@/backend/auth/sessionCache";
 import { prisma } from "@/backend/db/prisma";
 import { Prisma } from "@prisma/client";
@@ -8,10 +8,13 @@ import ClassSelector from "./ClassSelector";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { startOfSchoolDay, endOfSchoolDay, getSchoolNow } from "@/lib/time";
+import { getAdminDashboardSummary } from "@/backend/services/stats";
+import AdminDashboardStatsGrid from "@/frontend/components/admin/AdminDashboardStatsGrid";
 
+export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-const PassFailChart = dynamic(() => import("./PassFailChart"), {
+const PassFailChart = nextDynamic(() => import("./PassFailChart"), {
   loading: () => (
     <div style={{ height: "200px", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-secondary)" }}>
       Loading test performance chart...
@@ -19,7 +22,7 @@ const PassFailChart = dynamic(() => import("./PassFailChart"), {
   ),
 });
 
-const EditClassModal = dynamic(() => import("./EditClassModal"), {
+const EditClassModal = nextDynamic(() => import("./EditClassModal"), {
   loading: () => <div style={{ height: "36px" }} />,
 });
 
@@ -54,36 +57,51 @@ export default async function AdminDashboardPage({
 
   const resolvedSearchParams = await searchParams;
 
-  let totalStudents = 0;
-  let totalTeachers = 0;
-  let parentRecordCount = 0;
-  let parentUserCount = 0;
-  let totalClasses = 0;
-  let uniqueSubjects: { name: string }[] = [];
+  let dashboardSummary = {
+    students: {
+      activeStudents: 0,
+      allStudentsIncludingInactive: 0,
+      inactiveOrGraduatedStudents: 0,
+      dayScholars: 0,
+      hostelers: 0,
+    },
+    teachers: {
+      activeTeachers: 0,
+      allTeachersIncludingInactive: 0,
+    },
+    parents: {
+      totalParents: 0,
+      activeParents: 0,
+      enabledParents: 0,
+      parentsWithoutActiveStudents: 0,
+      totalStudentsCount: 0,
+    },
+    classes: {
+      totalSections: 0,
+      distinctClasses: 0,
+      sectionsWithClassTeacher: 0,
+    },
+    subjects: {
+      distinctSubjects: 0,
+      totalAllocations: 0,
+    },
+  };
   let classes: { id: string; name: string; section: string }[] = [];
 
   try {
-    const res = await Promise.all([
-      prisma.student.count({ where: { isActive: true } }).catch(() => 0),
-      prisma.teacher.count({ where: { isActive: true } }).catch(() => 0),
-      prisma.parent.count({ where: { isActive: true } }).catch(() => 0),
-      prisma.user.count({ where: { role: 'PARENT', status: 'ACTIVE' } }).catch(() => 0),
-      prisma.class.count({ where: { isActive: true } }).catch(() => 0),
-      prisma.subject.findMany({ distinct: ['name'], select: { name: true } }).catch(() => []),
+    const [summaryRes, classesRes] = await Promise.all([
+      getAdminDashboardSummary({ role: "ADMIN" }),
       prisma.class.findMany({
         where: { isActive: true },
         select: { id: true, name: true, section: true },
         orderBy: [{ name: 'asc' }, { section: 'asc' }]
       }).catch(() => [])
     ]);
-    [totalStudents, totalTeachers, parentRecordCount, parentUserCount, totalClasses, uniqueSubjects, classes] = res;
+    dashboardSummary = summaryRes;
+    classes = classesRes;
   } catch (err) {
     console.error("Admin dashboard stats fetch error:", err);
   }
-
-  const totalParents = Math.max(parentRecordCount, parentUserCount);
-
-  const totalSubjects = uniqueSubjects.length;
 
   let selectedClassData = null;
   let studentsData: StudentWithRelations[] = [];
@@ -388,85 +406,7 @@ export default async function AdminDashboardPage({
         </div>
       )}
 
-      <div className={styles.statsGrid}>
-        <Link href="/dashboard/admin/students" prefetch={false} style={{ textDecoration: 'none', color: 'inherit' }}>
-          <div className={styles.statCard}>
-            <div className={styles.statIcon} style={{ backgroundColor: "var(--primary-bg)", color: "var(--primary)" }}>
-              <Users size={24} />
-            </div>
-            <div className={styles.statInfo}>
-              <span className={styles.statLabel}>Total Students</span>
-              <span className={styles.statValue}>{totalStudents}</span>
-            </div>
-          </div>
-        </Link>
-        <Link href="/dashboard/admin/teachers" prefetch={false} style={{ textDecoration: 'none', color: 'inherit' }}>
-          <div className={styles.statCard}>
-            <div className={styles.statIcon} style={{ backgroundColor: "var(--success-bg)", color: "var(--success)" }}>
-              <Briefcase size={24} />
-            </div>
-            <div className={styles.statInfo}>
-              <span className={styles.statLabel}>Total Teachers</span>
-              <span className={styles.statValue}>{totalTeachers}</span>
-            </div>
-          </div>
-        </Link>
-        <Link href="/dashboard/admin/parents" prefetch={false} style={{ textDecoration: 'none', color: 'inherit' }}>
-          <div className={styles.statCard}>
-            <div className={styles.statIcon} style={{ backgroundColor: "var(--warning-bg)", color: "var(--warning)" }}>
-              <Users size={24} />
-            </div>
-            <div className={styles.statInfo}>
-              <span className={styles.statLabel}>Total Parents</span>
-              <span className={styles.statValue}>{totalParents}</span>
-            </div>
-          </div>
-        </Link>
-        <Link href="/dashboard/admin/classes" prefetch={false} style={{ textDecoration: 'none', color: 'inherit' }}>
-          <div className={styles.statCard}>
-            <div className={styles.statIcon} style={{ backgroundColor: "rgba(139, 92, 246, 0.1)", color: "#8b5cf6" }}>
-              <GraduationCap size={24} />
-            </div>
-            <div className={styles.statInfo}>
-              <span className={styles.statLabel}>Total Classes</span>
-              <span className={styles.statValue}>{totalClasses}</span>
-            </div>
-          </div>
-        </Link>
-        <Link href="/dashboard/admin/subjects" prefetch={false} style={{ textDecoration: 'none', color: 'inherit' }}>
-          <div className={styles.statCard}>
-            <div className={styles.statIcon} style={{ backgroundColor: "rgba(236, 72, 153, 0.1)", color: "#ec4899" }}>
-              <BookOpen size={24} />
-            </div>
-            <div className={styles.statInfo}>
-              <span className={styles.statLabel}>Total Subjects</span>
-              <span className={styles.statValue}>{totalSubjects}</span>
-            </div>
-          </div>
-        </Link>
-        <Link href="/dashboard/admin/teacher-attendance" prefetch={false} style={{ textDecoration: 'none', color: 'inherit' }}>
-          <div className={styles.statCard}>
-            <div className={styles.statIcon} style={{ backgroundColor: "var(--success-bg)", color: "var(--success)" }}>
-              <UserCheck size={24} />
-            </div>
-            <div className={styles.statInfo}>
-              <span className={styles.statLabel}>Teacher Attendance</span>
-              <span className={styles.statValue}>Manage</span>
-            </div>
-          </div>
-        </Link>
-        <Link href="/dashboard/admin/staff-attendance" prefetch={false} style={{ textDecoration: 'none', color: 'inherit' }}>
-          <div className={styles.statCard}>
-            <div className={styles.statIcon} style={{ backgroundColor: "rgba(6, 182, 212, 0.1)", color: "#06b6d4" }}>
-              <UserCheck size={24} />
-            </div>
-            <div className={styles.statInfo}>
-              <span className={styles.statLabel}>Staff Attendance</span>
-              <span className={styles.statValue}>Manage</span>
-            </div>
-          </div>
-        </Link>
-      </div>
+      <AdminDashboardStatsGrid initialSummary={dashboardSummary} />
 
       <div style={{ marginTop: "2rem", display: 'flex', flexWrap: 'wrap', gap: '1rem', justifyContent: 'space-between', alignItems: 'center', marginBottom: "1rem" }}>
         <h2 style={{ fontSize: "1.25rem", fontWeight: 600, margin: 0 }}>Class Overview</h2>

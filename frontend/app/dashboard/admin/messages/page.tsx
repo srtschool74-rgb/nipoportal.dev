@@ -25,31 +25,32 @@ export default async function AdminMessagesPage() {
       },
       orderBy: { name: 'asc' }
     }),
-    prisma.user.findMany({
-      where: { role: 'PARENT', status: 'ACTIVE' },
+    prisma.parent.findMany({
+      where: { isActive: true, user: { status: 'ACTIVE' } },
       select: {
-        id: true,
-        name: true,
-        email: true,
-        role: true,
-        parent: {
+        user: {
           select: {
-            children: {
+            id: true,
+            name: true,
+            email: true,
+            role: true,
+          }
+        },
+        children: {
+          where: { student: { isActive: true } },
+          select: {
+            student: {
               select: {
-                student: {
-                  select: {
-                    id: true,
-                    firstName: true,
-                    lastName: true,
-                    class: { select: { id: true, name: true, section: true } }
-                  }
-                }
+                id: true,
+                firstName: true,
+                lastName: true,
+                class: { select: { id: true, name: true, section: true } }
               }
             }
           }
         }
       },
-      orderBy: { name: 'asc' }
+      orderBy: { user: { name: 'asc' } }
     }),
     prisma.class.findMany({
       where: { isActive: true },
@@ -59,7 +60,8 @@ export default async function AdminMessagesPage() {
     prisma.message.findMany({
       where: {
         receiverId: session.user.id,
-        isRead: false
+        isRead: false,
+        isDeleted: false
       },
       select: { senderId: true }
     })
@@ -77,8 +79,12 @@ export default async function AdminMessagesPage() {
   }));
 
   const parents: ParentContact[] = rawParents.map(p => ({
-    ...p,
-    unreadCount: unreadMap.get(p.id) || 0
+    id: p.user.id,
+    name: p.user.name,
+    email: p.user.email,
+    role: p.user.role,
+    parent: { children: p.children },
+    unreadCount: unreadMap.get(p.user.id) || 0
   }));
 
   const totalUnreadCount = unreadList.length;

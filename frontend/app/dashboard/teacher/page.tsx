@@ -3,6 +3,7 @@ import { prisma } from "@/backend/db/prisma";
 import { Prisma } from "@prisma/client";
 import { getEffectiveTimetable } from "@/backend/lib/timetable/getEffectiveTimetable";
 import { getSchoolNow, startOfSchoolDay } from "@/lib/time";
+import { getClassCounts, getTotalStudents } from "@/backend/services/stats";
 import styles from "../dashboard.module.css";
 import { GraduationCap, Users, Clock, MessageSquare, Calendar as CalendarIcon, MapPin, Star, ArrowRight, ShieldAlert, Gift } from "lucide-react";
 import Link from "next/link";
@@ -36,14 +37,13 @@ export default async function TeacherDashboard() {
     );
   }
 
-  const classCount = teacher.classes.length;
-  const studentCount = teacher.classes.reduce((sum, cls) => sum + cls._count.students, 0);
-
   const schoolToday = getSchoolNow();
   const todayDayName = schoolToday.weekday;
   const todayDate = startOfSchoolDay();
 
   const [
+    classStats,
+    studentStats,
     activeHomeworks,
     unreadMessages,
     effectiveScheduleSlots,
@@ -51,6 +51,8 @@ export default async function TeacherDashboard() {
     upcomingEvents,
     upcomingMeetings
   ] = await Promise.all([
+    getClassCounts({ role: "TEACHER", teacherId: teacher.id }),
+    getTotalStudents({ role: "TEACHER", teacherId: teacher.id }),
     prisma.assignment.count({
       where: {
         teacherId: teacher.id,
@@ -61,6 +63,7 @@ export default async function TeacherDashboard() {
       where: {
         receiverId: session.user.id,
         isRead: false,
+        isDeleted: false,
       }
     }).catch(() => 0),
     getEffectiveTimetable({ teacherId: teacher.id }, todayDate).catch(() => []),
@@ -89,6 +92,9 @@ export default async function TeacherDashboard() {
       take: 3
     }).catch(() => [])
   ]);
+
+  const classCount = classStats.totalSections;
+  const studentCount = studentStats.activeStudents;
 
   // Combine regular schedule and assigned substitution duties from getEffectiveTimetable
   const todaysSchedule: Array<{

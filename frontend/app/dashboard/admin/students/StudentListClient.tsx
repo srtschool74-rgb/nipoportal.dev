@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
+import type { StudentStatsSummary } from "@/backend/services/stats/types";
+import { notifyStatsUpdated } from "@/frontend/hooks/useStatsLiveRefresh";
 import { useRouter } from "next/navigation";
 import {
   Plus, LayoutGrid, List,
@@ -34,11 +36,12 @@ interface ClassItem {
 }
 
 interface StudentListClientProps {
-  students: StudentData[];
+  students: (StudentData & { enrollmentStatus?: string | null })[];
   classes: ClassItem[];
+  studentStats?: StudentStatsSummary;
 }
 
-export default function StudentListClient({ students, classes }: StudentListClientProps) {
+export default function StudentListClient({ students, classes, studentStats }: StudentListClientProps) {
   const router = useRouter();
   const confirm = useConfirm();
 
@@ -49,11 +52,11 @@ export default function StudentListClient({ students, classes }: StudentListClie
     setItems: setLocalStudents,
   } = useOptimisticList<StudentData>(students);
 
-  // Search & Filters
+  // Search & Filters (default All Classes + Active matching Dashboard Total Students)
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [selectedClassId, setSelectedClassId] = useState<string>(() => classes[0]?.id || "");
-  const [statusFilter, setStatusFilter] = useState<string>("ALL");
+  const [selectedClassId, setSelectedClassId] = useState<string>("ALL");
+  const [statusFilter, setStatusFilter] = useState<string>("ACTIVE");
   const [residenceFilter, setResidenceFilter] = useState<string>("ALL");
   const [sortBy, setSortBy] = useState<"ROLL" | "NAME" | "ADM">("ROLL");
   const [viewMode, setViewMode] = useState<"GRID" | "LIST">("LIST");
@@ -72,11 +75,15 @@ export default function StudentListClient({ students, classes }: StudentListClie
     return () => clearTimeout(timer);
   }, [searchTerm]);
 
-  // Compute student counts per class
+  // Compute active non-graduated student counts per class
   const classStudentCounts = useMemo(() => {
     const map = new Map<string, number>();
-    localStudents.forEach((s) => {
-      if (s.classId) {
+    localStudents.forEach((s: StudentData & { enrollmentStatus?: string | null }) => {
+      const isEnrolledActive =
+        s.isActive &&
+        s.enrollmentStatus !== "GRADUATED" &&
+        s.enrollmentStatus !== "TRANSFERRED";
+      if (s.classId && isEnrolledActive) {
         map.set(s.classId, (map.get(s.classId) || 0) + 1);
       }
     });
@@ -144,14 +151,19 @@ export default function StudentListClient({ students, classes }: StudentListClie
           }
         }
 
-        // Class Filter: strictly class-wise
-        if (!selectedClassId || student.classId !== selectedClassId) {
+        // Class Filter
+        if (selectedClassId && selectedClassId !== "ALL" && student.classId !== selectedClassId) {
           return false;
         }
 
-        // Status Filter
-        if (statusFilter === "ACTIVE" && !student.isActive) return false;
-        if (statusFilter === "INACTIVE" && student.isActive) return false;
+        // Status Filter (matches getActiveStudentWhere definition)
+        const enrollmentStatus = (student as StudentData & { enrollmentStatus?: string | null }).enrollmentStatus;
+        const isActiveEnrolled =
+          student.isActive &&
+          enrollmentStatus !== "GRADUATED" &&
+          enrollmentStatus !== "TRANSFERRED";
+        if (statusFilter === "ACTIVE" && !isActiveEnrolled) return false;
+        if (statusFilter === "INACTIVE" && isActiveEnrolled) return false;
 
         // Residence
         if (residenceFilter !== "ALL" && student.residenceType !== residenceFilter) {
@@ -222,6 +234,8 @@ export default function StudentListClient({ students, classes }: StudentListClie
       if (res && "error" in res && res.error) {
         throw new Error(String(res.error));
       }
+      notifyStatsUpdated();
+      router.refresh();
       return { ...student, isActive: targetStatus };
     });
   };
@@ -246,6 +260,8 @@ export default function StudentListClient({ students, classes }: StudentListClie
         if (res?.error) {
           throw new Error(res.error);
         }
+        notifyStatsUpdated();
+        router.refresh();
       },
       {
         itemName: `Student ${studentFullName}`,
@@ -363,11 +379,18 @@ export default function StudentListClient({ students, classes }: StudentListClie
             <SingleSelect
               value={selectedClassId}
               onChange={setSelectedClassId}
-              options={classes.map((c) => ({
-                value: c.id,
-                label: `Class: ${c.name} - ${c.section}`,
-                badge: `${classStudentCounts.get(c.id) || 0} students`,
-              }))}
+              options={[
+                {
+                  value: "ALL",
+                  label: "All Classes",
+                  badge: `${studentStats?.activeStudents ?? localStudents.filter((s) => s.isActive).length} students`,
+                },
+                ...classes.map((c) => ({
+                  value: c.id,
+                  label: `Class: ${c.name} - ${c.section}`,
+                  badge: `${classStudentCounts.get(c.id) || 0} students`,
+                })),
+              ]}
               searchable={true}
               placeholder="Select class..."
               searchPlaceholder="Search classes..."
@@ -462,7 +485,55 @@ export default function StudentListClient({ students, classes }: StudentListClie
               gap: "0.85rem",
             }}
           >
-            {/* Individual Class Cards - No 'All Classes' card */}
+            {/* All Classes Card */}
+            <div
+              onClick={() => setSelectedClassId("ALL")}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  setSelectedClassId("ALL");
+                }
+              }}
+              style={{
+                padding: "1rem",
+                borderRadius: "12px",
+                cursor: "pointer",
+                transition: "all 0.2s ease",
+                background: selectedClassId === "ALL" ? "rgba(59, 130, 246, 0.16)" : "var(--card-bg, #0f172a)",
+                border:
+                  selectedClassId === "ALL"
+                    ? "2px solid var(--primary, #3b82f6)"
+                    : "1px solid var(--border-color, rgba(255, 255, 255, 0.1))",
+                boxShadow: selectedClassId === "ALL" ? "0 0 16px rgba(59, 130, 246, 0.35)" : "0 4px 12px rgba(0,0,0,0.2)",
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "0.4rem" }}>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: "1rem", color: selectedClassId === "ALL" ? "#60a5fa" : "inherit" }}>
+                    All Classes
+                  </div>
+                  <div style={{ fontSize: "0.72rem", color: "var(--text-secondary, #94a3b8)", marginTop: "0.15rem" }}>
+                    Combined School Roster
+                  </div>
+                </div>
+                <span
+                  style={{
+                    fontSize: "0.75rem",
+                    padding: "0.18rem 0.55rem",
+                    borderRadius: "10px",
+                    background: "rgba(59, 130, 246, 0.15)",
+                    color: "#60a5fa",
+                    fontWeight: 700,
+                  }}
+                >
+                  {studentStats?.activeStudents ?? localStudents.filter((s) => s.isActive).length}
+                </span>
+              </div>
+            </div>
+
+            {/* Individual Class Cards */}
             {classes.map((c) => {
               const count = classStudentCounts.get(c.id) || 0;
               const isSelected = selectedClassId === c.id;
@@ -548,7 +619,9 @@ export default function StudentListClient({ students, classes }: StudentListClie
       >
         <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", flexWrap: "wrap" }}>
           <span style={{ fontSize: "1.05rem", fontWeight: 700, color: "var(--text-primary, #f8fafc)" }}>
-            {selectedClassObj ? `${selectedClassObj.name.startsWith("Class ") ? selectedClassObj.name : `Class ${selectedClassObj.name}`} - ${selectedClassObj.section} Roster` : "No Class Selected"}
+            {selectedClassObj
+              ? `${selectedClassObj.name.startsWith("Class ") ? selectedClassObj.name : `Class ${selectedClassObj.name}`} - ${selectedClassObj.section} Roster`
+              : "All Classes Roster"}
           </span>
           {selectedClassObj?.classTeacher?.user?.name && (
             <span
@@ -576,18 +649,40 @@ export default function StudentListClient({ students, classes }: StudentListClie
         emptyTitle={
           selectedClassObj
             ? `No students found in Class ${selectedClassObj.name} - ${selectedClassObj.section}`
-            : "No class selected"
+            : localStudents.length === 0
+            ? "No students yet"
+            : "No matching students found"
         }
         emptyMessage={
-          selectedClassObj
-            ? debouncedSearch || statusFilter !== "ALL" || residenceFilter !== "ALL"
-              ? "No students in this class match your search or filter criteria."
-              : "No students are currently enrolled in this class. Click '+ Add Student' above to enroll students."
-            : "Please select a class from the list above to view students."
+          localStudents.length === 0
+            ? "No students yet. Add students from Create New Roles or import an Excel file."
+            : debouncedSearch || statusFilter !== "ACTIVE" || residenceFilter !== "ALL" || selectedClassId !== "ALL"
+            ? "No students match your search or filter criteria."
+            : "No active students are currently enrolled."
+        }
+        emptyAction={
+          <Link
+            href="/dashboard/admin/create-roles/parent"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "0.4rem",
+              padding: "0.5rem 1.25rem",
+              borderRadius: "8px",
+              background: "var(--primary, #3b82f6)",
+              color: "#ffffff",
+              fontWeight: 600,
+              fontSize: "0.875rem",
+              textDecoration: "none",
+            }}
+          >
+            Add / Import Students
+          </Link>
         }
         onReset={() => {
           setSearchTerm("");
-          setStatusFilter("ALL");
+          setSelectedClassId("ALL");
+          setStatusFilter("ACTIVE");
           setResidenceFilter("ALL");
         }}
         resetLabel="Reset Search & Filters"
@@ -1027,7 +1122,7 @@ export default function StudentListClient({ students, classes }: StudentListClie
         student={editingStudent}
         allClasses={classes}
         existingParents={existingParents}
-        defaultClassId={selectedClassId || classes[0]?.id || undefined}
+        defaultClassId={selectedClassId !== "ALL" ? selectedClassId : classes[0]?.id || undefined}
         onSuccess={() => {
           router.refresh();
         }}

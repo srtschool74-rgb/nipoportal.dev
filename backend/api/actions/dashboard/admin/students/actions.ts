@@ -2,6 +2,7 @@
 
 import { prisma } from "@/backend/db/prisma";
 import { revalidatePath } from "next/cache";
+import { invalidateAllStatsCaches } from "@/backend/services/stats";
 
 export async function deactivateStudent(id: string) {
   try {
@@ -10,6 +11,7 @@ export async function deactivateStudent(id: string) {
       data: { isActive: false }
     });
     revalidatePath('/dashboard/admin/students');
+    await invalidateAllStatsCaches();
     return { success: true };
   } catch (error: unknown) {
     if (error instanceof Error) return { error: error.message };
@@ -24,6 +26,7 @@ export async function activateStudent(id: string) {
       data: { isActive: true }
     });
     revalidatePath('/dashboard/admin/students');
+    await invalidateAllStatsCaches();
     return { success: true };
   } catch (error: unknown) {
     if (error instanceof Error) return { error: error.message };
@@ -56,6 +59,7 @@ export async function deleteStudent(id: string) {
     });
 
     revalidatePath('/dashboard/admin/students');
+    await invalidateAllStatsCaches();
     return { success: true };
   } catch (error: any) {
     return { error: `Failed to delete student: ${error.message || "Unknown error"}` };

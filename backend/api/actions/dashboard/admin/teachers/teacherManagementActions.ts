@@ -2,6 +2,7 @@
 
 import { prisma } from "@/backend/db/prisma";
 import { revalidatePath } from "next/cache";
+import { invalidateAllStatsCaches } from "@/backend/services/stats";
 import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
 import bcrypt from "bcryptjs";
@@ -151,6 +152,7 @@ export async function createTeacherAction(rawData: z.infer<typeof teacherCreateS
 
     revalidatePath("/dashboard/admin/teachers");
     revalidatePath("/dashboard/admin/timetable");
+    await invalidateAllStatsCaches();
     return { success: true, teacherId: result.teacherId };
   } catch (error: unknown) {
     if (error instanceof z.ZodError) {
@@ -325,6 +327,7 @@ export async function updateTeacherAction(rawData: z.infer<typeof teacherUpdateS
     revalidatePath("/dashboard/admin/teachers");
     revalidatePath("/dashboard/admin/timetable");
     revalidatePath("/dashboard/teacher");
+    await invalidateAllStatsCaches();
     return { success: true };
   } catch (error: unknown) {
     if (error instanceof z.ZodError) {
@@ -381,6 +384,7 @@ export async function toggleTeacherStatusAction(teacherId: string) {
 
     revalidatePath("/dashboard/admin/teachers");
     revalidatePath("/dashboard/admin/timetable");
+    await invalidateAllStatsCaches();
     return { success: true, newStatus };
   } catch (error: unknown) {
     if (error instanceof Error) return { error: error.message };
@@ -478,6 +482,7 @@ export async function deleteTeacherPermanentlyAction(teacherId: string) {
 
     revalidatePath("/dashboard/admin/teachers");
     revalidatePath("/dashboard/admin/timetable");
+    await invalidateAllStatsCaches();
     return { success: true };
   } catch (error: unknown) {
     if (error instanceof Error) return { error: error.message };

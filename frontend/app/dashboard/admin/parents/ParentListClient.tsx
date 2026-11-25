@@ -7,6 +7,8 @@ import Link from "next/link";
 import { deactivateParent, activateParent, deleteParent } from "@/backend/api/actions/dashboard/admin/parents/actions";
 import { Parent, User, ParentStudent, Student, Class } from "@prisma/client";
 import { useConfirm } from "@/frontend/components/ui/ConfirmDialog";
+import type { ParentStatsSummary } from "@/backend/services/stats/types";
+import { notifyStatsUpdated } from "@/frontend/hooks/useStatsLiveRefresh";
 import { SearchBar, ResultsContainer } from "@/frontend/components/ui";
 
 type ParentWithRelations = Parent & {
@@ -17,11 +19,13 @@ type ParentWithRelations = Parent & {
 export default function ParentListClient({ 
   parents, 
   classes,
-  totalStudentsCount
+  totalStudentsCount,
+  parentStats,
 }: { 
   parents: ParentWithRelations[]; 
   classes: Class[];
   totalStudentsCount?: number;
+  parentStats?: ParentStatsSummary;
 }) {
   const router = useRouter();
   const [parentList, setParentList] = useState<ParentWithRelations[]>(parents);
@@ -96,7 +100,13 @@ export default function ParentListClient({
       
       return matchesSearch && matchesStatus && matchesClass && matchesStudentCount;
     }).sort((a, b) => a.user.name.trim().localeCompare(b.user.name.trim()));
-  }, [parents, searchTerm, statusFilter, classFilter, studentCountFilter]);
+  }, [parentList, searchTerm, statusFilter, classFilter, studentCountFilter]);
+
+  const totalParentsMetric = parentStats?.totalParents ?? parentList.length;
+  const activeParentsMetric =
+    parentStats?.activeParents ??
+    parentList.filter((p) => p.isActive && p.user.status === "ACTIVE" && p.children.length > 0).length;
+  const totalStudentsMetric = parentStats?.totalStudentsCount ?? totalStudents;
 
   const totalPages = Math.max(1, Math.ceil(filteredParents.length / pageSize));
   const startIndex = (currentPage - 1) * pageSize;
@@ -118,18 +128,18 @@ export default function ParentListClient({
       }}>
         <div>
           <span style={{ fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--text-secondary)', fontWeight: 600 }}>Total Parents</span>
-          <div style={{ fontSize: '1.75rem', fontWeight: 700, color: 'var(--text-primary)' }}>{parents.length}</div>
+          <div style={{ fontSize: '1.75rem', fontWeight: 700, color: 'var(--text-primary)' }}>{totalParentsMetric}</div>
         </div>
         <div>
           <span style={{ fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--text-secondary)', fontWeight: 600 }}>Active Parents</span>
           <div style={{ fontSize: '1.75rem', fontWeight: 700, color: 'var(--success)' }}>
-            {parents.filter(p => p.isActive && p.user.status === 'ACTIVE').length}
+            {activeParentsMetric}
           </div>
         </div>
         <div>
           <span style={{ fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--text-secondary)', fontWeight: 600 }}>Total Student Count</span>
           <div style={{ fontSize: '1.75rem', fontWeight: 700, color: 'var(--primary)' }}>
-            {totalStudents}
+            {totalStudentsMetric}
           </div>
         </div>
       </div>
@@ -184,7 +194,30 @@ export default function ParentListClient({
         isPending={isPendingSearch}
         isEmpty={filteredParents.length === 0}
         emptyTitle="No parent accounts found"
-        emptyMessage="No parent records matched your search query or filters."
+        emptyMessage={
+          parentList.length === 0
+            ? "No parent accounts yet. Add parents from Create New Roles or import an Excel file."
+            : "No parent records matched your search query or filters."
+        }
+        emptyAction={
+          <Link
+            href="/dashboard/admin/create-roles/parent"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "0.4rem",
+              padding: "0.5rem 1.25rem",
+              borderRadius: "8px",
+              background: "var(--primary, #3b82f6)",
+              color: "#ffffff",
+              fontWeight: 600,
+              fontSize: "0.875rem",
+              textDecoration: "none",
+            }}
+          >
+            Add / Import Parents
+          </Link>
+        }
         onReset={() => {
           setSearchTerm("");
           setStatusFilter("");
@@ -316,6 +349,7 @@ export default function ParentListClient({
                               setParentList(prev => prev.map(p => p.id === parent.id ? { ...p, isActive: false, user: { ...p.user, status: "INACTIVE" } } : p));
                               try {
                                 await deactivateParent(parent.id);
+                                notifyStatsUpdated();
                                 router.refresh();
                               } catch (err: any) {
                                 setParentList(prev => prev.map(p => p.id === parent.id ? { ...p, isActive: true, user: { ...p.user, status: "ACTIVE" } } : p));
@@ -343,6 +377,7 @@ export default function ParentListClient({
                               setParentList(prev => prev.map(p => p.id === parent.id ? { ...p, isActive: true, user: { ...p.user, status: "ACTIVE" } } : p));
                               try {
                                 await activateParent(parent.id);
+                                notifyStatsUpdated();
                                 router.refresh();
                               } catch (err: any) {
                                 setParentList(prev => prev.map(p => p.id === parent.id ? { ...p, isActive: false, user: { ...p.user, status: "INACTIVE" } } : p));
@@ -379,6 +414,7 @@ export default function ParentListClient({
                                 alert(res.error);
                                 setParentList(previousList); // Rollback
                               } else {
+                                notifyStatsUpdated();
                                 router.refresh();
                               }
                             } catch (err: any) {

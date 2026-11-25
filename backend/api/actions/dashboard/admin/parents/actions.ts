@@ -2,6 +2,7 @@
 
 import { prisma } from "@/backend/db/prisma";
 import { revalidatePath } from "next/cache";
+import { invalidateAllStatsCaches } from "@/backend/services/stats";
 
 export async function deactivateParent(id: string) {
   await prisma.parent.update({
@@ -20,6 +21,7 @@ export async function deactivateParent(id: string) {
   // Do NOT cascade to students, as per requirements
   revalidatePath('/dashboard/admin/parents');
   revalidatePath('/dashboard/admin/users');
+  await invalidateAllStatsCaches();
   return { success: true };
 }
 
@@ -39,6 +41,7 @@ export async function activateParent(id: string) {
 
   revalidatePath('/dashboard/admin/parents');
   revalidatePath('/dashboard/admin/users');
+  await invalidateAllStatsCaches();
   return { success: true };
 }
 
@@ -76,6 +79,7 @@ export async function deleteParent(id: string) {
 
     revalidatePath('/dashboard/admin/parents');
     revalidatePath('/dashboard/admin/users');
+    await invalidateAllStatsCaches();
     return { success: true, message: "Parent deleted successfully." };
   } catch (error: unknown) {
     if (error instanceof Error) {

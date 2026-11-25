@@ -3,6 +3,7 @@
 import { prisma } from "@/backend/db/prisma";
 import bcrypt from "bcryptjs";
 import { revalidatePath } from "next/cache";
+import { invalidateAllStatsCaches } from "@/backend/services/stats";
 import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
 import { isSuperAdmin } from "@/backend/lib/auth/superAdmin";
@@ -137,6 +138,7 @@ export async function createTeacherAction(formData: FormData) {
     revalidatePath("/dashboard/admin/users");
     revalidatePath("/dashboard/admin/teachers");
     revalidatePath("/dashboard/admin/subjects");
+    await invalidateAllStatsCaches();
     
     return { success: true, message: "Teacher created successfully." };
   } catch (error: unknown) {
@@ -358,6 +360,7 @@ export async function createParentStudentAction(formData: FormData) {
       // Ignored outside Next.js request context
     }
 
+    await invalidateAllStatsCaches();
     return { success: true, message: "Parent & Student created successfully." };
   } catch (error: unknown) {
     if (error instanceof Error) {
@@ -417,6 +420,7 @@ export async function createAdminAction(formData: FormData) {
     });
 
     revalidatePath("/dashboard/admin/users");
+    await invalidateAllStatsCaches();
     
     return { success: true, message: "Admin created successfully." };
   } catch (error: unknown) {

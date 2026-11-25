@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/backend/db/prisma";
 import { revalidateImportRows, ImportRole } from "@/lib/import";
 import { withDbRetry } from "@/lib/db";
+import { invalidateAllStatsCaches } from "@/backend/services/stats";
 import {
   parseAndScanWorkbook,
   validateAndCorrelateBatch,
@@ -219,6 +220,7 @@ export async function commitExcelImportAction(
       revalidatePath("/dashboard/admin/classes");
       revalidatePath("/dashboard/admin/create-roles/admin");
       revalidatePath("/dashboard/admin/excel-import");
+      await invalidateAllStatsCaches();
     } catch {
       // Ignore outside request context
     }

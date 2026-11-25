@@ -2,6 +2,7 @@
 
 import { prisma } from "@/backend/db/prisma";
 import { revalidatePath } from "next/cache";
+import { invalidateAllStatsCaches } from "@/backend/services/stats";
 
 export async function createClassAction(formData: FormData) {
   try {
@@ -66,6 +67,7 @@ export async function createClassAction(formData: FormData) {
     }
 
     revalidatePath("/dashboard/admin/classes");
+    await invalidateAllStatsCaches();
     return { success: true, message: "Classes created successfully." };
   } catch (error: unknown) {
     if (error instanceof Error) {
@@ -108,6 +110,7 @@ export async function editClassAction(formData: FormData) {
 
     revalidatePath("/dashboard/admin");
     revalidatePath("/dashboard/admin/classes");
+    await invalidateAllStatsCaches();
     return { success: true, message: "Class updated successfully." };
   } catch (error: unknown) {
     if (error instanceof Error) {
@@ -171,6 +174,7 @@ export async function editClassGroupAction(formData: FormData) {
 
     revalidatePath("/dashboard/admin");
     revalidatePath("/dashboard/admin/classes");
+    await invalidateAllStatsCaches();
     return { success: true, message: "Class details updated successfully." };
   } catch (error: unknown) {
     if (error instanceof Error) {
@@ -187,6 +191,7 @@ export async function deactivateClassAction(id: string) {
       data: { isActive: false }
     });
     revalidatePath("/dashboard/admin/classes");
+    await invalidateAllStatsCaches();
     return { success: true };
   } catch (error: unknown) {
     if (error instanceof Error) return { error: error.message };
@@ -295,6 +300,7 @@ export async function deleteClassAction(id: string) {
 
     revalidatePath("/dashboard/admin");
     revalidatePath("/dashboard/admin/classes");
+    await invalidateAllStatsCaches();
     return { success: true, message: `Class ${classData.name} - Section ${classData.section} deleted successfully.` };
   } catch (error: unknown) {
     console.error("Delete class error:", error);
@@ -320,6 +326,7 @@ export async function deleteClassGroupByNameAction(className: string) {
 
     revalidatePath("/dashboard/admin");
     revalidatePath("/dashboard/admin/classes");
+    await invalidateAllStatsCaches();
     return { success: true, message: `Class "${className}" and all its sections deleted successfully.` };
   } catch (error: unknown) {
     console.error("Delete class group error:", error);

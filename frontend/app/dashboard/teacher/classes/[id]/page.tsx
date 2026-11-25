@@ -2,6 +2,7 @@ import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
 import { prisma } from "@/backend/db/prisma";
 import { autoDeleteExpiredHomework } from "@/backend/api/actions/dashboard/teacher/assignments/actions";
+import { isSchoolToday } from "@/lib/time";
 import Link from "next/link";
 import styles from "../../../dashboard.module.css";
 import {
@@ -29,6 +30,13 @@ export default async function TeacherClassRosterPage({ params }: { params: Promi
       where: { id: id },
       include: {
         students: {
+          where: {
+            isActive: true,
+            OR: [
+              { enrollmentStatus: null },
+              { enrollmentStatus: { notIn: ["GRADUATED", "TRANSFERRED"] } },
+            ],
+          },
           orderBy: { firstName: 'asc' }
         }
       }
@@ -66,14 +74,7 @@ export default async function TeacherClassRosterPage({ params }: { params: Promi
     return <p style={{ padding: "2rem" }}>Class not found.</p>;
   }
 
-  const isToday = (date: Date) => {
-    const today = new Date();
-    return (
-      date.getDate() === today.getDate() &&
-      date.getMonth() === today.getMonth() &&
-      date.getFullYear() === today.getFullYear()
-    );
-  };
+  const isToday = (date: Date) => isSchoolToday(date);
 
   return (
     <div className={styles.dashboard}>

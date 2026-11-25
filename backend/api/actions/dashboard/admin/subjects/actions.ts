@@ -2,6 +2,7 @@
 
 import { prisma } from "@/backend/db/prisma";
 import { revalidatePath } from "next/cache";
+import { invalidateAllStatsCaches } from "@/backend/services/stats";
 
 export async function createSubjectAction(formData: FormData) {
   try {
@@ -63,6 +64,7 @@ export async function createSubjectAction(formData: FormData) {
     }
 
     revalidatePath("/dashboard/admin/subjects");
+    await invalidateAllStatsCaches();
     return { success: true, message: "Subjects created successfully." };
   } catch (error: unknown) {
     if (error instanceof Error) {
@@ -205,6 +207,7 @@ export async function updateSubjectGroupAction(formData: FormData) {
     }
     revalidatePath("/dashboard/admin/timetable");
 
+    await invalidateAllStatsCaches();
     return { success: true, message: "Subject updated successfully.", newName };
   } catch (error: unknown) {
     console.error("Update subject error:", error);
@@ -222,6 +225,7 @@ export async function deactivateSubject(id: string) {
       data: { isActive: false }
     });
     revalidatePath("/dashboard/admin/subjects");
+    await invalidateAllStatsCaches();
     return { success: true };
   } catch (error: unknown) {
     if (error instanceof Error) return { error: error.message };
@@ -271,6 +275,7 @@ export async function deleteSubject(id: string) {
 
     revalidatePath("/dashboard/admin/subjects");
     revalidatePath("/dashboard/admin/timetable");
+    await invalidateAllStatsCaches();
     return { success: true, message: "Subject deleted successfully." };
   } catch (error: unknown) {
     console.error("Delete subject error:", error);
@@ -324,6 +329,7 @@ export async function deleteSubjectGroupByName(name: string) {
 
     revalidatePath("/dashboard/admin/subjects");
     revalidatePath("/dashboard/admin/timetable");
+    await invalidateAllStatsCaches();
     return { success: true, message: `Subject "${name}" deleted successfully.` };
   } catch (error: unknown) {
     console.error("Delete subject group error:", error);
@@ -367,6 +373,7 @@ export async function assignSubjectTeacher(subjectId: string, teacherId: string)
     revalidatePath("/dashboard/teacher/classes");
     revalidatePath("/dashboard/parent/assignments");
     revalidatePath("/dashboard/parent/homework");
+    await invalidateAllStatsCaches();
     return { success: true };
   } catch (error: unknown) {
     if (error instanceof Error) {
@@ -459,6 +466,7 @@ export async function importSubjectsFromCsvAction(formData: FormData) {
     }
 
     revalidatePath("/dashboard/admin/subjects");
+    await invalidateAllStatsCaches();
     return { success: true, count: createdCount };
   } catch (error) {
     console.error("Import subjects error:", error);

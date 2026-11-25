@@ -6,25 +6,58 @@ async function queryTeacherFromDb(userId: string) {
     where: { userId },
     include: {
       classTeacherOf: {
+        where: { isActive: true },
         include: {
           _count: {
-            select: { students: true }
+            select: {
+              students: {
+                where: {
+                  isActive: true,
+                  OR: [
+                    { enrollmentStatus: null },
+                    { enrollmentStatus: { notIn: ["GRADUATED", "TRANSFERRED"] } },
+                  ],
+                },
+              },
+            },
           }
         }
       },
       classes: {
+        where: { isActive: true },
         include: {
           _count: {
-            select: { students: true }
+            select: {
+              students: {
+                where: {
+                  isActive: true,
+                  OR: [
+                    { enrollmentStatus: null },
+                    { enrollmentStatus: { notIn: ["GRADUATED", "TRANSFERRED"] } },
+                  ],
+                },
+              },
+            },
           }
         }
       },
       subjects: {
+        where: { isActive: true },
         include: {
           class: {
             include: {
               _count: {
-                select: { students: true }
+                select: {
+                  students: {
+                    where: {
+                      isActive: true,
+                      OR: [
+                        { enrollmentStatus: null },
+                        { enrollmentStatus: { notIn: ["GRADUATED", "TRANSFERRED"] } },
+                      ],
+                    },
+                  },
+                },
               }
             }
           }

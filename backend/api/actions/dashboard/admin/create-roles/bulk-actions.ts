@@ -5,6 +5,7 @@ import { hash } from "bcryptjs";
 import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
 import { revalidatePath } from "next/cache";
+import { invalidateAllStatsCaches } from "@/backend/services/stats";
 
 export async function bulkCreateUsers(type: "teacher" | "student", payload: Record<string, unknown>[]) {
   try {
@@ -207,6 +208,7 @@ export async function bulkCreateUsers(type: "teacher" | "student", payload: Reco
       // Ignored outside Next.js request context
     }
 
+    await invalidateAllStatsCaches();
     return { success: true, count: successCount, errors: errors.length > 0 ? errors : undefined };
   } catch (error) {
     return { error: (error instanceof Error ? error.message : String(error)) || "Failed to process upload" };

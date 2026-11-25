@@ -2,6 +2,7 @@
 
 import { prisma } from "@/backend/db/prisma";
 import { revalidatePath } from "next/cache";
+import { invalidateAllStatsCaches } from "@/backend/services/stats";
 import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
 import bcrypt from "bcryptjs";
@@ -175,6 +176,7 @@ export async function createStudentAction(rawData: z.infer<typeof studentCreateS
     });
 
     revalidatePath("/dashboard/admin/students");
+    await invalidateAllStatsCaches();
     return { success: true, studentId: result.studentId };
   } catch (error: unknown) {
     if (error instanceof z.ZodError) {
@@ -408,6 +410,7 @@ export async function updateStudentAction(rawData: z.infer<typeof studentUpdateS
     revalidatePath("/dashboard/admin/students");
     revalidatePath("/admin/buses");
     revalidatePath("/dashboard/admin/transport");
+    await invalidateAllStatsCaches();
     return { success: true };
   } catch (error: unknown) {
     if (error instanceof z.ZodError) {
@@ -479,6 +482,7 @@ export async function toggleStudentStatusAction(studentId: string) {
     revalidatePath("/dashboard/admin/students");
     revalidatePath("/admin/buses");
     revalidatePath("/dashboard/admin/transport");
+    await invalidateAllStatsCaches();
     return { success: true, newStatus: newIsActive };
   } catch (error: unknown) {
     if (error instanceof Error) return { error: error.message };
@@ -568,6 +572,7 @@ export async function deleteStudentPermanentlyAction(studentId: string) {
     revalidatePath("/dashboard/admin/students");
     revalidatePath("/admin/buses");
     revalidatePath("/dashboard/admin/transport");
+    await invalidateAllStatsCaches();
     return { success: true };
   } catch (error: unknown) {
     if (error instanceof Error) return { error: error.message };

@@ -8,6 +8,15 @@ async function queryParentFromDb(userId: string) {
     where: { userId },
     include: {
       children: {
+        where: {
+          student: {
+            isActive: true,
+            OR: [
+              { enrollmentStatus: null },
+              { enrollmentStatus: { notIn: ["GRADUATED", "TRANSFERRED"] } },
+            ],
+          },
+        },
         include: {
           student: {
             include: {
@@ -17,6 +26,7 @@ async function queryParentFromDb(userId: string) {
                     include: { user: true }
                   },
                   subjects: {
+                    where: { isActive: true },
                     include: {
                       teacher: { include: { user: true } }
                     }
