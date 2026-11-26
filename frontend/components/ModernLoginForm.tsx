@@ -241,9 +241,13 @@ export default function ModernLoginForm({
           } catch {}
         }
 
-        // 280ms duration for Crest Morph and Card Fade Out
-        await new Promise((resolve) => setTimeout(resolve, 280));
-        window.location.href = target;
+        // Instant Next.js Client Routing - Pre-warms target and eliminates white page reload
+        try {
+          router.prefetch(target);
+        } catch {}
+
+        router.push(target);
+        router.refresh();
       }
     } catch (err: any) {
       console.error("[Login Error]", err);

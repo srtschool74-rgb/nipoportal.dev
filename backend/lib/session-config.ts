@@ -5,7 +5,7 @@
  * until explicit logout or admin revocation.
  */
 
-export const SINGLE_DEVICE_ROLES: readonly string[] = ["PARENT", "TEACHER"];
+export const SINGLE_DEVICE_ROLES: readonly string[] = [];
 
 // 10 Years (87,600 hours) indefinite idle persistence for permanent seamless logins
 export const IDLE_TIMEOUT_HOURS = 87600;

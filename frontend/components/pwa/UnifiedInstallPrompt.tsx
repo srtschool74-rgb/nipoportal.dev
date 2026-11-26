@@ -138,6 +138,9 @@ export default function UnifiedInstallPrompt() {
           setDeferredPrompt(null);
           setIsOpen(false);
           setShowFloatingPill(false);
+          if (typeof window !== "undefined") {
+            window.dispatchEvent(new CustomEvent("open-notification-prompt"));
+          }
         }
       } catch (err) {
         console.warn("[PWA Install] Native prompt error:", err);
@@ -155,6 +158,9 @@ export default function UnifiedInstallPrompt() {
     try {
       sessionStorage.setItem("srt_install_prompt_dismissed_session", "true");
     } catch {}
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("open-notification-prompt"));
+    }
   }, []);
 
   // Never render if user is already running the installed app
@@ -185,6 +191,7 @@ export default function UnifiedInstallPrompt() {
       {isOpen && (
         <div
           className={styles.overlay}
+          data-testid="unified-install-modal"
           onClick={(e) => {
             if (e.target === e.currentTarget) handleDismiss();
           }}

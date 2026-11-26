@@ -36,31 +36,42 @@ export default function PwaWelcomeNotificationPrompt() {
     const currentPerm = Notification.permission;
     setPermission(currentPerm);
 
-    // Do not show modal on home or login pages so user can enter credentials without interruption
-    const path = window.location.pathname;
-    if (path === "/" || path === "/login" || path.startsWith("/login/")) {
+    // If permission already granted or denied, don't show prompt
+    if (currentPerm !== "default") {
       setIsOpen(false);
       setShowFloatingPill(false);
       return;
     }
 
-    // Enforce "shows only once, not twice": if already granted, denied, or prompted once, never show modal
-    const alreadyPrompted =
-      localStorage.getItem("srt_notif_prompted_once") === "true" ||
-      localStorage.getItem("srt_pwa_notif_dismissed_v1") === "true";
-    if (currentPerm !== "default" || alreadyPrompted) {
-      setIsOpen(false);
-      setShowFloatingPill(false);
-      return;
-    }
+    // Listen for chained event from Install prompt or splash complete
+    const handleOpenFromEvent = () => {
+      if (typeof Notification !== "undefined" && Notification.permission === "default") {
+        setTimeout(() => {
+          setIsOpen(true);
+          setShowFloatingPill(false);
+        }, 350);
+      }
+    };
 
-    // Only show prompt if not previously dismissed
+    window.addEventListener("open-notification-prompt", handleOpenFromEvent);
+
+    // Auto-prompt on login page if install prompt is already completed or after 1.5s
+    const isLogin = window.location.pathname.startsWith("/login") || window.location.pathname === "/";
     const timer = setTimeout(() => {
-      setIsOpen(true);
-      setShowFloatingPill(false);
-    }, 1200);
+      if (typeof Notification !== "undefined" && Notification.permission === "default") {
+        // If install prompt is not currently visible, show notification prompt
+        const installModal = document.querySelector("[data-testid='unified-install-modal']");
+        if (!installModal) {
+          setIsOpen(true);
+          setShowFloatingPill(false);
+        }
+      }
+    }, isLogin ? 2200 : 1200);
 
-    return () => clearTimeout(timer);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener("open-notification-prompt", handleOpenFromEvent);
+    };
   }, []);
 
   const handleDismiss = () => {
