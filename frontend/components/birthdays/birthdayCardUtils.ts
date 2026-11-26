@@ -32,10 +32,10 @@ export function serializeBirthdayCardPayload(payload: BirthdayCardPayload): stri
  * Attempts to parse a birthday card payload from a notification content string.
  * Returns null if the content is not a card payload.
  */
-export function parseBirthdayCardPayload(content?: string | null): BirthdayCardPayload | null {
-  if (!content) return null;
+export function parseBirthdayCardPayload(content?: string | null, title?: string | null): BirthdayCardPayload | null {
+  if (!content && !title) return null;
 
-  const trimmed = content.trim();
+  const trimmed = (content || "").trim();
 
   if (trimmed.startsWith(BIRTHDAY_CARD_PREFIX)) {
     try {
@@ -55,6 +55,34 @@ export function parseBirthdayCardPayload(content?: string | null): BirthdayCardP
     } catch {
       return null;
     }
+  }
+
+  // Auto-detect plain-text birthday notifications and synthesize the official designed card
+  const titleStr = title || "";
+  const isBirthday = /birthday/i.test(titleStr) || /happy birthday/i.test(trimmed);
+
+  if (isBirthday) {
+    let recipientName = "Student";
+    const nameMatch = titleStr.match(/Happy Birthday,?\s*([^!🎂🎉\n]+)/i) ||
+                      trimmed.match(/wishes\s+([A-Za-z0-9\s]+?)\s+a\s+very\s+happy/i);
+    if (nameMatch && nameMatch[1]) {
+      recipientName = nameMatch[1].trim();
+    }
+
+    return {
+      recipientName,
+      classNameLabel: undefined,
+      deityName: "Amman",
+      cardLine1: "I have great pleasure in conveying my best wishes on the eve of your birthday",
+      cardLine2: "My prayers are to Amman to bless you with peace, prosperity and happiness",
+      senderName: "PRANAV.J",
+      senderDesignation: "Correspondent",
+      schoolName: "SRT SCHOOL",
+      schoolLogo: "/logo/srt-logo.svg",
+      schoolTagline: "UNIVERSAL SCHOOL",
+      ammanPhotoUrl: "/assets/birthday/amman.jpg",
+      summaryText: trimmed || `Happy Birthday ${recipientName}!`,
+    };
   }
 
   return null;

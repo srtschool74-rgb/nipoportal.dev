@@ -34,8 +34,10 @@ jobs:
       - name: Execute Keep-Alive Health Ping
         run: |
           TARGET="${{ github.event.inputs.target_url || secrets.RENDER_BACKEND_URL || 'https://nipoportal.dev.onrender.com' }}"
-          echo "📡 Executing keep-alive ping to: $TARGET"
-          node keep-alive.js --once "$TARGET"
+          echo "📡 Executing keep-alive ping to Render: $TARGET"
+          node keep-alive.js --once "$TARGET" || true
+          echo "📡 Executing keep-alive warmup to Vercel: https://nipoportal.vercel.app/api/warmup"
+          node keep-alive.js --once "https://nipoportal.vercel.app/api/warmup" || true
         env:
           PING_TIMEOUT_MS: 40000
           PING_RETRIES: 2

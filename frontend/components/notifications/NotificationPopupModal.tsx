@@ -428,7 +428,7 @@ export default function NotificationPopupModal({
     }
   };
 
-  const birthdayCard = current ? parseBirthdayCardPayload(current.description) : null;
+  const birthdayCard = current ? parseBirthdayCardPayload(current.description, current.title) : null;
 
   return (
     <div className={styles.overlay} onClick={(e) => {
@@ -470,25 +470,27 @@ export default function NotificationPopupModal({
             <span 
               className={styles.categoryPill}
               style={{
-                backgroundColor: current.badgeColors.bg,
-                color: current.badgeColors.text,
-                border: `1px solid ${current.badgeColors.border}`
+                backgroundColor: birthdayCard ? "rgba(236, 72, 153, 0.12)" : current.badgeColors.bg,
+                color: birthdayCard ? "#ec4899" : current.badgeColors.text,
+                border: `1px solid ${birthdayCard ? "rgba(236, 72, 153, 0.3)" : current.badgeColors.border}`
               }}
             >
-              {getCategoryIcon(current.category)}
-              <span>{current.badgeLabel}</span>
+              {birthdayCard ? <Cake size={13} /> : getCategoryIcon(current.category)}
+              <span>{birthdayCard ? "BIRTHDAY" : current.badgeLabel}</span>
             </span>
           </div>
 
           {/* Main Title */}
           <h2 id="notif-title" className={styles.mainTitle}>
-            {current.category === "BIRTHDAY" ? "Happy Birthday Celebration" : "Notification"}
+            {birthdayCard || current.category === "BIRTHDAY" ? "Happy Birthday Celebration" : "Notification"}
           </h2>
 
-          {/* Specific Notification Title */}
-          <h3 className={styles.subTitle}>
-            {current.title}
-          </h3>
+          {/* Specific Notification Title (Hidden if birthday card is rendered to avoid repetition) */}
+          {!birthdayCard && (
+            <h3 className={styles.subTitle}>
+              {current.title}
+            </h3>
+          )}
 
           {/* Detailed Description or Designed Birthday Card */}
           {birthdayCard ? (
