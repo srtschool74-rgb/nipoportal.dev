@@ -336,13 +336,6 @@ export default function UnifiedInstallPrompt() {
                 <Download size={16} />
                 <span>{showGuide ? "Got It" : "Install App Now"}</span>
               </button>
-              <button
-                type="button"
-                onClick={handleDismiss}
-                className={styles.dismissBtn}
-              >
-                Maybe Later
-              </button>
             </div>
           </div>
         </div>

@@ -262,13 +262,6 @@ export default function IosInstallPrompt() {
               >
                 <span>Got It</span>
               </button>
-              <button
-                type="button"
-                onClick={handleDismiss}
-                className={styles.dismissBtn}
-              >
-                Maybe Later
-              </button>
             </div>
           </div>
         </div>

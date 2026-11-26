@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import Image from "next/image";
 import { Bell, CheckCircle2, Loader2, X, AlertTriangle } from "lucide-react";
 import styles from "./PwaWelcomeNotificationPrompt.module.css";
 
@@ -223,94 +222,84 @@ export default function PwaWelcomeNotificationPrompt() {
 
       {/* Main Notification Prompt Modal */}
       {isOpen && (
-        <div className={styles.backdrop} role="dialog" aria-modal="true" aria-labelledby="welcome-notif-title">
+        <div
+          className={styles.backdrop}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="welcome-notif-title"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) handleDismiss();
+          }}
+        >
           <div className={styles.modal}>
-            <div className={styles.header}>
-              <div className={styles.logoRow}>
-                <div className={styles.logoBox}>
-                  <Image
-                    src="/icons/icon-192x192.png"
-                    alt="SRT School Portal"
-                    width={38}
-                    height={38}
-                    priority
-                  />
-                </div>
-                <div>
-                  <span className={styles.appBadge}>SRT SCHOOL PORTAL</span>
-                  <h3 id="welcome-notif-title" className={styles.title}>
-                    Enable Lock Screen Notifications
-                  </h3>
+            {/* Top Close (X) Button */}
+            <button
+              type="button"
+              className={styles.topCloseBtn}
+              onClick={handleDismiss}
+              aria-label="Close"
+              title="Close"
+            >
+              <X size={18} />
+            </button>
+
+            {/* Centered Circular Bell Icon with Glow Ring */}
+            <div className={styles.iconContainer}>
+              <div className={styles.iconOuterRing}>
+                <div className={styles.iconInnerCircle}>
+                  <Bell size={24} className={styles.bellIcon} />
                 </div>
               </div>
-              <button
-                type="button"
-                className={styles.closeBtn}
-                onClick={handleDismiss}
-                aria-label="Close"
-              >
-                <X size={18} />
-              </button>
             </div>
 
-            <div className={styles.body}>
+            {/* Centered Heading & Subtitle */}
+            <div className={styles.contentArea}>
+              <h3 id="welcome-notif-title" className={styles.title}>
+                Stay in the loop
+              </h3>
               <p className={styles.desc}>
-                Stay updated with instant alerts on your phone lock screen for homework assignments, timetable changes, birthday wishes, report cards, and school announcements.
+                Get timely updates and never miss out on what matters.
               </p>
 
               {permission === "denied" && (
-                <div style={{ marginTop: "0.85rem", padding: "0.75rem", background: "rgba(239, 68, 68, 0.08)", border: "1px solid rgba(239, 68, 68, 0.2)", borderRadius: "8px", fontSize: "0.85rem", color: "#dc2626" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontWeight: 600, marginBottom: "0.25rem" }}>
-                    <AlertTriangle size={16} /> Notifications Currently Blocked
-                  </div>
-                  <div>To enable: Tap the lock/tune icon next to the URL in your browser bar, choose <strong>Permissions &gt; Notifications</strong>, and switch to <strong>Allow</strong>.</div>
+                <div className={styles.deniedAlert}>
+                  <AlertTriangle size={15} style={{ flexShrink: 0 }} />
+                  <span>Notifications are blocked in your browser. Please tap the lock/tune icon in your address bar and set Notifications to Allow.</span>
                 </div>
               )}
 
               {isSuccess ? (
                 <div className={styles.successCard}>
-                  <CheckCircle2 size={20} color="#059669" />
+                  <CheckCircle2 size={18} color="#059669" />
                   <span>Notifications enabled successfully!</span>
                 </div>
               ) : errorMsg ? (
-                <div style={{ color: "#ef4444", fontSize: "0.875rem", marginTop: "0.75rem" }}>
+                <div className={styles.errorText}>
                   {errorMsg}
                 </div>
               ) : null}
             </div>
 
-            <div className={styles.actions}>
-              {!isSuccess && (
-                <>
-                  <button
-                    type="button"
-                    className={styles.enableBtn}
-                    onClick={handleEnableNotifications}
-                    disabled={loading}
-                  >
-                    {loading ? (
-                      <>
-                        <Loader2 size={18} className="animate-spin" />
-                        <span>Enabling...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Bell size={18} />
-                        <span>Enable Notifications</span>
-                      </>
-                    )}
-                  </button>
-                  <button
-                    type="button"
-                    className={styles.laterBtn}
-                    onClick={handleDismiss}
-                    disabled={loading}
-                  >
-                    Maybe Later
-                  </button>
-                </>
-              )}
-            </div>
+            {/* Single Action Button (No 'Maybe later') */}
+            {!isSuccess && (
+              <div className={styles.actions}>
+                <button
+                  type="button"
+                  className={styles.enableBtn}
+                  onClick={handleEnableNotifications}
+                  disabled={loading}
+                >
+                  {loading ? (
+                    <>
+                      <Loader2 size={18} className="animate-spin" />
+                      <span>Enabling...</span>
+                    </>
+                  ) : (
+                    <span>Enable notifications</span>
+                  )}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
