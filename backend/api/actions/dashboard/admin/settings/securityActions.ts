@@ -163,18 +163,22 @@ export async function unlockSettingsAction(password: string): Promise<{
           });
         }, 2, 200);
       } catch (dbErr) {
-        console.warn("[unlockSettingsAction] Failed to reset failedAttempts in DB:", dbErr);
+        console.warn("[unlockSettingsAction] Non-blocking: Failed to reset failedAttempts in DB:", dbErr);
       }
 
-      prisma.auditLog.create({
-        data: {
-          userId: session.user.id,
-          action: "SETTINGS_UNLOCK_SUCCESS",
-          targetModel: "SettingsSecurity",
-          targetId: security.id,
-          details: "Settings successfully unlocked.",
-        },
-      }).catch(() => {});
+      try {
+        await prisma.auditLog.create({
+          data: {
+            userId: session.user.id,
+            action: "SETTINGS_UNLOCK_SUCCESS",
+            targetModel: "SettingsSecurity",
+            targetId: security.id,
+            details: "Settings successfully unlocked.",
+          },
+        });
+      } catch (auditErr) {
+        console.warn("[unlockSettingsAction] Non-blocking: Audit log create note:", auditErr);
+      }
     }
 
     return { success: true };
@@ -182,7 +186,7 @@ export async function unlockSettingsAction(password: string): Promise<{
     console.error("[unlockSettingsAction] Uncaught Error:", error);
     const msg = error?.message || "";
     if (msg.includes("EMAXCONNSESSION") || msg.includes("max clients reached") || msg.includes("pool_size")) {
-      return { error: "Database connection pool is busy. Please retry in a few seconds." };
+      return { error: "Database connection pool is busy. Please retry in a few moments." };
     }
     return { error: msg || "An unexpected error occurred while unlocking settings." };
   }

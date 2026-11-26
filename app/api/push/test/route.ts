@@ -58,10 +58,10 @@ export async function POST(req: Request) {
       "OneSignal Web Push & direct WebPush are operational on SRT Portal!";
     const url = bodyPayload.url || "/dashboard";
 
-    // 2. Primary Dispatch: OneSignal REST API
+    // Test push endpoint strictly targets the current authenticated user's registered devices
     const oneSignalResult = await sendOneSignalPush({
       userId,
-      broadcast: isBroadcast,
+      broadcast: false,
       title,
       body,
       url,
@@ -69,18 +69,18 @@ export async function POST(req: Request) {
       category: "TEST",
     });
 
-    // 3. Auxiliary Dispatch: Direct Web Push to subscriptions in PostgreSQL (fallback)
+    // 3. Auxiliary Dispatch: Direct Web Push to user's registered subscriptions
     const [pushSubs, pwaSubs, registrySubs] = await Promise.all([
       prisma.pushSubscription.findMany({
-        where: isBroadcast ? { isActive: true } : { userId, isActive: true },
+        where: { userId, isActive: true },
         select: { id: true, endpoint: true, p256dh: true, auth: true, platform: true, deviceName: true },
       }),
       prisma.pwaSubscription.findMany({
-        where: isBroadcast ? {} : { userId },
+        where: { userId },
         select: { id: true, endpoint: true, p256dhKey: true, authKey: true, deviceType: true },
       }).catch(() => []),
       prisma.deviceNotificationsRegistry.findMany({
-        where: isBroadcast ? {} : { userId },
+        where: { userId },
         select: { id: true, endpoint: true, p256dh: true, auth: true, deviceId: true },
       }).catch(() => []),
     ]);

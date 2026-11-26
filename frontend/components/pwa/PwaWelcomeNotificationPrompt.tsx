@@ -42,6 +42,15 @@ export default function PwaWelcomeNotificationPrompt() {
       return;
     }
 
+    // Check 3-day dismissal cooldown (max 3 dismissals)
+    try {
+      const dismissCount = parseInt(localStorage.getItem("srt_notif_dismiss_count") || "0", 10);
+      const dismissUntil = parseInt(localStorage.getItem("srt_notif_dismiss_until") || "0", 10);
+      if (dismissCount >= 3 || Date.now() < dismissUntil) {
+        return;
+      }
+    } catch {}
+
     // Listen for chained event from Install prompt or splash complete
     const handleOpenFromEvent = () => {
       if (typeof Notification !== "undefined" && Notification.permission === "default") {
@@ -75,11 +84,20 @@ export default function PwaWelcomeNotificationPrompt() {
 
   const handleDismiss = () => {
     try {
+      const currentCount = parseInt(localStorage.getItem("srt_notif_dismiss_count") || "0", 10);
+      localStorage.setItem("srt_notif_dismiss_count", String(currentCount + 1));
+      localStorage.setItem("srt_notif_dismiss_until", String(Date.now() + 3 * 24 * 60 * 60 * 1000));
       localStorage.setItem("srt_notif_prompted_once", "true");
-      localStorage.setItem("srt_pwa_notif_dismissed_v1", "true");
     } catch {}
     setIsOpen(false);
     setShowFloatingPill(false);
+
+    // Chain to install prompt after closing notification prompt
+    if (typeof window !== "undefined") {
+      setTimeout(() => {
+        window.dispatchEvent(new CustomEvent("open-install-prompt"));
+      }, 350);
+    }
   };
 
   const handleOpenPrompt = () => {

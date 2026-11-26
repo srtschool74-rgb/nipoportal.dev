@@ -1,27 +1,52 @@
-import styles from "./dashboard.module.css";
+import React from "react";
 
 export default function DashboardLoading() {
   return (
-    <div className={styles.dashboard} style={{ minHeight: "70vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "1.25rem" }}>
-      <div style={{
-        width: "50px",
-        height: "50px",
-        borderRadius: "50%",
-        border: "4px solid rgba(242, 184, 75, 0.2)",
-        borderTopColor: "#f2b84b",
-        animation: "spin 0.8s linear infinite"
-      }} />
-      <div style={{ textAlign: "center" }}>
-        <h3 style={{ fontSize: "1.1rem", fontWeight: 700, color: "var(--text-primary)", marginBottom: "0.25rem" }}>
-          SRT Universal School
-        </h3>
-        <p style={{ fontSize: "0.85rem", color: "var(--text-secondary)" }}>
-          Loading your dashboard...
-        </p>
+    <div
+      style={{
+        minHeight: "80vh",
+        padding: "1.5rem",
+        boxSizing: "border-box",
+        display: "flex",
+        flexDirection: "column",
+        gap: "1.5rem",
+      }}
+    >
+      {/* Top row stat cards skeleton */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+          gap: "1.25rem",
+        }}
+      >
+        {[1, 2, 3, 4].map((i) => (
+          <div
+            key={i}
+            style={{
+              height: "110px",
+              borderRadius: "16px",
+              background: "var(--card-bg, rgba(255,255,255,0.04))",
+              border: "1px solid var(--border-color, rgba(255,255,255,0.08))",
+              animation: "skeletonPulse 1.4s ease-in-out infinite",
+            }}
+          />
+        ))}
       </div>
+      {/* Content panel skeleton */}
+      <div
+        style={{
+          height: "360px",
+          borderRadius: "18px",
+          background: "var(--card-bg, rgba(255,255,255,0.04))",
+          border: "1px solid var(--border-color, rgba(255,255,255,0.08))",
+          animation: "skeletonPulse 1.4s ease-in-out infinite",
+        }}
+      />
       <style>{`
-        @keyframes spin {
-          to { transform: rotate(360deg); }
+        @keyframes skeletonPulse {
+          0%, 100% { opacity: 0.6; }
+          50% { opacity: 0.95; }
         }
       `}</style>
     </div>

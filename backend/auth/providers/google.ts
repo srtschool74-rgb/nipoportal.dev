@@ -133,9 +133,30 @@ export async function verifyGoogleSignIn(user: any, account: any) {
     }
 
     if (!dbUser) {
-      console.warn(`[GoogleAuth] Rejecting unregistered Google email: ${user.email}`);
-      void logAttempt(false, cleanGoogleEmail);
-      return "/?error=AccessDenied: Your Google account email is not registered. Please contact your school administrator to register your email.";
+      // Auto-provision user with role: "PARENT" if not found, allowing any authorized Google user to access the portal
+      try {
+        dbUser = await prisma.user.create({
+          data: {
+            email: cleanGoogleEmail,
+            name: user.name || cleanGoogleEmail.split("@")[0],
+            role: "PARENT",
+            status: "ACTIVE",
+            googleEmail: cleanGoogleEmail,
+            googleEmailVerified: true,
+          },
+        });
+        console.log(`[GoogleAuth] Auto-provisioned new PARENT user for Google login: ${cleanGoogleEmail}`);
+      } catch (createErr) {
+        console.error("[GoogleAuth] Auto-provision error, attempting query fallback:", createErr);
+        // If race condition created it, re-query
+        dbUser = await prisma.user.findFirst({
+          where: { email: { equals: cleanGoogleEmail, mode: "insensitive" } },
+        });
+        if (!dbUser) {
+          void logAttempt(false, cleanGoogleEmail);
+          return "/?error=AccessDenied: Unable to register your Google account. Please contact school administration.";
+        }
+      }
     }
 
     if (dbUser.status === "INACTIVE") {

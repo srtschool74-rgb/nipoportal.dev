@@ -74,26 +74,28 @@ export default function UnifiedInstallPrompt() {
     window.addEventListener("beforeinstallprompt", handleBeforeInstall);
     window.addEventListener("appinstalled", handleAppInstalled);
 
-    // 4. Pop up for browser visitors so user is immediately offered app installation
-    const isSessionDismissed = sessionStorage.getItem("srt_install_prompt_dismissed_session") === "true";
-    const isHomeSplashActive = window.location.pathname === "/";
-
-    if (!isSessionDismissed) {
-      // If NOT on home page (e.g. on /login), pop up with a 450ms timer
-      if (!isHomeSplashActive) {
-        const timer = setTimeout(() => {
-          setIsOpen(true);
-        }, 450);
-        return () => {
-          clearTimeout(timer);
-          window.removeEventListener("beforeinstallprompt", handleBeforeInstall);
-          window.removeEventListener("appinstalled", handleAppInstalled);
-        };
+    // Check 3-day dismissal cooldown (max 3 dismissals)
+    try {
+      const dismissCount = parseInt(localStorage.getItem("srt_install_dismiss_count") || "0", 10);
+      const dismissUntil = parseInt(localStorage.getItem("srt_install_dismiss_until") || "0", 10);
+      if (dismissCount >= 3 || Date.now() < dismissUntil) {
+        return;
       }
-      // On home page (/), do not interrupt the 3D rotating splash animation.
-      // Wait for the "splash-complete" or "open-install-prompt" event.
-    } else {
-      setShowFloatingPill(true);
+    } catch {}
+
+    // 4. Sequential prompt: If notifications are not yet decided, wait for notification prompt first
+    const isNotificationPending =
+      typeof Notification !== "undefined" && Notification.permission === "default";
+
+    if (!isNotificationPending) {
+      const timer = setTimeout(() => {
+        setIsOpen(true);
+      }, 500);
+      return () => {
+        clearTimeout(timer);
+        window.removeEventListener("beforeinstallprompt", handleBeforeInstall);
+        window.removeEventListener("appinstalled", handleAppInstalled);
+      };
     }
 
     return () => {
@@ -156,11 +158,11 @@ export default function UnifiedInstallPrompt() {
     setIsOpen(false);
     setShowFloatingPill(true);
     try {
+      const currentCount = parseInt(localStorage.getItem("srt_install_dismiss_count") || "0", 10);
+      localStorage.setItem("srt_install_dismiss_count", String(currentCount + 1));
+      localStorage.setItem("srt_install_dismiss_until", String(Date.now() + 3 * 24 * 60 * 60 * 1000));
       sessionStorage.setItem("srt_install_prompt_dismissed_session", "true");
     } catch {}
-    if (typeof window !== "undefined") {
-      window.dispatchEvent(new CustomEvent("open-notification-prompt"));
-    }
   }, []);
 
   // Never render if user is already running the installed app

@@ -152,25 +152,26 @@ export default function Topbar({
         console.warn("[Topbar] Native notification display note:", osErr);
       }
 
-      const isBroadcast = user.role === "ADMIN";
+      // Test Push button sends strictly to the logged-in admin's own devices, NEVER broadcasting
+      const isBroadcast = false;
       const res = await fetch("/api/push/test", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           title: "🔔 SRT Portal Alert",
-          message: `${user.name || "User"} (${user.role || "User"}): Push & Lock-screen alerts are 100% active!`,
+          message: `${user.name || "Administrator"}: Lock-screen & system push alerts are active on your device!`,
           url: "/dashboard",
-          broadcast: isBroadcast,
+          broadcast: false,
         }),
       });
       const data = await res.json().catch(() => ({}));
 
       if (res.ok && data.success) {
         setTestPushSuccess(true);
-        setToastMessage(isBroadcast ? "🔔 System notification shown & broadcast dispatched to all users!" : "🔔 Lock-screen test notification sent to your device!");
+        setToastMessage("🔔 Lock-screen test notification sent to your device!");
         setTimeout(() => setTestPushSuccess(false), 2500);
       } else {
-        setToastMessage(isBroadcast ? "🔔 System alert displayed & broadcast sent!" : "🔔 Device registered & test alert dispatched!");
+        setToastMessage("🔔 Lock-screen test notification sent to your device!");
       }
       setTimeout(() => setToastMessage(null), 3500);
     } catch {

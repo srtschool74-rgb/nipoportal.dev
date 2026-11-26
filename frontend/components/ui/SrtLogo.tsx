@@ -39,7 +39,7 @@ export default function SrtLogo({
       }}
     >
       <Image
-        src="/logo/srt-logo.png"
+        src="/logo/srt-logo.svg"
         alt={alt}
         fill
         sizes="(max-width: 640px) 240px, (max-width: 1024px) 360px, 640px"
@@ -92,7 +92,7 @@ export default function SrtLogo({
       }}
     >
       <Image
-        src="/logo/srt-logo.png"
+        src="/logo/srt-logo.svg"
         alt={alt}
         fill
         sizes="(max-width: 640px) 240px, (max-width: 1024px) 360px, 640px"

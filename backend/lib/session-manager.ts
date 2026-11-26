@@ -162,10 +162,17 @@ export async function validateSession(sessionId: string): Promise<ValidateSessio
 
     const now = Date.now();
     const lastActiveTime = new Date(session.lastActiveAt).getTime();
-    const idleLimitMs = IDLE_TIMEOUT_HOURS * 3600 * 1000;
+    const userRole = (session.user?.role || "").toUpperCase();
 
-    // Check idle timeout only if an explicit limit is configured below 10 years
-    if (IDLE_TIMEOUT_HOURS && IDLE_TIMEOUT_HOURS < 87600 && (now - lastActiveTime > idleLimitMs)) {
+    // Admin accounts enforce admin idle timeout (default 7 days / 168h).
+    // Parents and Teachers enjoy permanent sliding sessions (10 years).
+    const isAdmin = userRole === "ADMIN";
+    const idleHours = isAdmin
+      ? parseInt(process.env.ADMIN_IDLE_TIMEOUT_HOURS || "168", 10)
+      : IDLE_TIMEOUT_HOURS;
+    const idleLimitMs = idleHours * 3600 * 1000;
+
+    if (now - lastActiveTime > idleLimitMs) {
       sessionValidationCache.delete(sessionId);
       await revokeSession(sessionId, "IDLE_TIMEOUT");
       return { valid: false, reason: "IDLE_TIMEOUT" as SessionRevocationReason };

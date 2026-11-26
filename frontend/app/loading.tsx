@@ -1,54 +1,53 @@
 import React from "react";
-import SrtLogo from "@/frontend/components/ui/SrtLogo";
 
 export default function RootLoading() {
   return (
     <div
       style={{
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
         minHeight: "100dvh",
+        backgroundColor: "#060a28",
         padding: "1.5rem",
         boxSizing: "border-box",
-        backgroundColor: "#060a28",
-        color: "#ffffff",
-        gap: "1.5rem",
+        display: "flex",
+        flexDirection: "column",
+        gap: "1.25rem",
       }}
     >
+      {/* Topbar Skeleton */}
       <div
         style={{
-          position: "relative",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
+          height: "60px",
+          borderRadius: "14px",
+          background: "linear-gradient(90deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.03) 100%)",
+          backgroundSize: "200% 100%",
+          animation: "skeletonShimmer 1.5s infinite",
+        }}
+      />
+      {/* Dashboard Grid Skeleton */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+          gap: "1.25rem",
         }}
       >
-        <div
-          style={{
-            position: "absolute",
-            width: "72px",
-            height: "72px",
-            borderRadius: "50%",
-            border: "3px solid rgba(242, 184, 75, 0.2)",
-            borderTopColor: "#f2b84b",
-            animation: "rootSpin 0.9s cubic-bezier(0.5, 0.1, 0.5, 0.9) infinite",
-          }}
-        />
-        <SrtLogo size={42} priority />
-      </div>
-      <div style={{ textAlign: "center" }}>
-        <h3 style={{ fontSize: "1.1rem", fontWeight: 700, color: "#f8fafc", margin: "0 0 0.35rem 0", letterSpacing: "0.02em" }}>
-          SRT Universal School
-        </h3>
-        <p style={{ fontSize: "0.85rem", color: "rgba(242, 184, 75, 0.85)", margin: 0, fontWeight: 500 }}>
-          Loading your dashboard...
-        </p>
+        {[1, 2, 3, 4].map((i) => (
+          <div
+            key={i}
+            style={{
+              height: "120px",
+              borderRadius: "16px",
+              background: "linear-gradient(90deg, rgba(255,255,255,0.02) 0%, rgba(255,255,255,0.06) 50%, rgba(255,255,255,0.02) 100%)",
+              backgroundSize: "200% 100%",
+              animation: "skeletonShimmer 1.5s infinite",
+            }}
+          />
+        ))}
       </div>
       <style>{`
-        @keyframes rootSpin {
-          to { transform: rotate(360deg); }
+        @keyframes skeletonShimmer {
+          0% { background-position: 200% 0; }
+          100% { background-position: -200% 0; }
         }
       `}</style>
     </div>

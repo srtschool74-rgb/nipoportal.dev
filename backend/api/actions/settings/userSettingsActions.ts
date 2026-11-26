@@ -277,3 +277,41 @@ export async function saveSchoolDefaultsAction(input: SaveSchoolDefaultsInput) {
   }
 }
 
+export async function logoutAllDevicesAction() {
+  try {
+    const session = await getServerSession(getAuthOptions());
+    if (!session?.user?.id) {
+      return { success: false, error: "Unauthorized." };
+    }
+    await revokeAllUserSessions(session.user.id, "LOGOUT");
+    return { success: true, message: "Logged out of all other devices successfully." };
+  } catch (err: unknown) {
+    console.error("logoutAllDevicesAction error:", err);
+    return { success: false, error: "Failed to log out of all devices." };
+  }
+}
+
+export async function getUserSessionsAction() {
+  try {
+    const session = await getServerSession(getAuthOptions());
+    if (!session?.user?.id) {
+      return { success: false, sessions: [] };
+    }
+    const sessions = await prisma.userSession.findMany({
+      where: { userId: session.user.id, revokedAt: null },
+      orderBy: { lastActiveAt: "desc" },
+      take: 10,
+      select: {
+        sessionId: true,
+        deviceInfo: true,
+        ipAddress: true,
+        createdAt: true,
+        lastActiveAt: true,
+      },
+    });
+    return { success: true, sessions };
+  } catch {
+    return { success: false, sessions: [] };
+  }
+}
+

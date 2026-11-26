@@ -16,8 +16,11 @@ export function sanitizeConnectionUrl(rawUrl: string): string {
 
   // Supabase Supavisor: port 5432 is Session mode (capped at 15 clients).
   // Port 6543 is Transaction mode (supports thousands of concurrent serverless clients).
-  if (url.includes("pooler.supabase.com:5432")) {
-    url = url.replace("pooler.supabase.com:5432", "pooler.supabase.com:6543");
+  if (url.includes("supabase.com") || url.includes("supabase.co") || url.includes("pooler.supabase.com")) {
+    url = url.replace(":5432", ":6543");
+    if (!url.includes("pgbouncer=true")) {
+      url += (url.includes("?") ? "&" : "?") + "pgbouncer=true";
+    }
   }
 
   // Transaction pooler (port 6543 / pooler.supabase.com) requires pgbouncer=true in Prisma

@@ -253,9 +253,12 @@ export async function proxy(req: NextRequest) {
     }
   }
 
-  // C. Authenticated Login Redirect: When user visits '/login' while authenticated,
-  // immediately redirect them straight to their dashboard with 0 latency.
-  if (pathname === "/login" && !req.nextUrl.searchParams.get("reason")) {
+  // C. Authenticated Fast Redirect: When user visits '/', '/login', or '/dashboard' while authenticated,
+  // immediately redirect them straight to their role dashboard at the edge with 0 latency.
+  if (
+    (pathname === "/" || pathname === "/login" || pathname === "/dashboard") &&
+    !req.nextUrl.searchParams.get("reason")
+  ) {
     const token = await getToken({
       req,
       secret: process.env.NEXTAUTH_SECRET,
@@ -269,11 +272,13 @@ export async function proxy(req: NextRequest) {
       else if (role === "PARENT") targetPath = "/dashboard/parent";
       else if (role === "STAFF" || role === "NON_TEACHING_STAFF") targetPath = "/staff/my-bus";
 
-      const destinationUrl = new URL(targetPath, req.url);
-      return applySecurityHeaders(
-        NextResponse.redirect(destinationUrl),
-        allowedOriginHeader
-      );
+      if (pathname !== targetPath) {
+        const destinationUrl = new URL(targetPath, req.url);
+        return applySecurityHeaders(
+          NextResponse.redirect(destinationUrl),
+          allowedOriginHeader
+        );
+      }
     }
   }
 

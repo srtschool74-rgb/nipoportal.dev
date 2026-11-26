@@ -5,11 +5,15 @@
  * until explicit logout or admin revocation.
  */
 
-export const SINGLE_DEVICE_ROLES: readonly string[] = [];
+// Enforce 1 phone/device active at a time for Parents and Teachers by default
+export const SINGLE_DEVICE_ROLES: readonly string[] = ["PARENT", "TEACHER"];
 
-// 10 Years (87,600 hours) indefinite idle persistence for permanent seamless logins
+// 10 Years (87,600 hours) indefinite sliding idle persistence for permanent seamless logins (Parents & Teachers)
 export const IDLE_TIMEOUT_HOURS = 87600;
 export const INACTIVITY_LOGOUT_HOURS = 87600;
+
+// Admin accounts default idle timeout: 7 days (168 hours), configurable in Admin Settings
+export const DEFAULT_ADMIN_IDLE_TIMEOUT_HOURS = 168;
 
 // Permanent session duration: null disables automatic session termination
 export const MAX_SESSION_HOURS: number | null = null;

@@ -38,6 +38,8 @@ jobs:
           node keep-alive.js --once "$TARGET" || true
           echo "📡 Executing keep-alive warmup to Vercel: https://nipoportal.vercel.app/api/warmup"
           node keep-alive.js --once "https://nipoportal.vercel.app/api/warmup" || true
+          echo "📡 Executing outbox queue drain: https://nipoportal.vercel.app/api/notifications/outbox/process"
+          node keep-alive.js --once "https://nipoportal.vercel.app/api/notifications/outbox/process" || true
         env:
           PING_TIMEOUT_MS: 40000
           PING_RETRIES: 2

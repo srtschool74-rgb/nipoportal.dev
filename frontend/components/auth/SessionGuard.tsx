@@ -146,9 +146,15 @@ export default function SessionGuard() {
 
       if (res.status === 401) {
         const data = await res.json().catch(() => ({}));
-        const reason = data.reason || "other-device";
-        const message = data.message || REVOCATION_MESSAGES.LOGIN_ELSEWHERE;
-        handleSessionRevocation(reason, message);
+        // Robust safety guard: Only terminate session if server explicitly revoked it
+        if (
+          data?.rawReason &&
+          ["LOGIN_ELSEWHERE", "ADMIN_FORCED", "PASSWORD_CHANGED", "LOGOUT", "IDLE_TIMEOUT"].includes(data.rawReason)
+        ) {
+          const reason = data.reason || "other-device";
+          const message = data.message || REVOCATION_MESSAGES.LOGIN_ELSEWHERE;
+          handleSessionRevocation(reason, message);
+        }
       }
     } catch (err) {
       // Network hiccup: don't immediately revoke on temporary offline

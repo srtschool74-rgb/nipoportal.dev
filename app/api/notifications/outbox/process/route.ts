@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
-import { processNotificationOutbox } from "@/lib/dispatcher";
+import { processNotificationOutbox, retryDeadLetters } from "@/lib/dispatcher";
 
 export const dynamic = "force-dynamic";
 
@@ -26,6 +26,17 @@ export async function POST(req: Request) {
       if (!session || !session.user || session.user.role !== "ADMIN") {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
       }
+    }
+
+    const body = await req.json().catch(() => ({}));
+    if (body.action === "retry_dead_letter") {
+      const retried = await retryDeadLetters();
+      return NextResponse.json({
+        success: true,
+        action: "retry_dead_letter",
+        retriedCount: retried.count,
+        timestamp: new Date().toISOString(),
+      });
     }
 
     const result = await processNotificationOutbox();

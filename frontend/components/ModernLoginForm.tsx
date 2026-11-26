@@ -243,8 +243,7 @@ export default function ModernLoginForm({
           router.prefetch(target);
         } catch {}
 
-        router.push(target);
-        router.refresh();
+        router.replace(target);
       }
     } catch (err: any) {
       console.error("[Login Error]", err);

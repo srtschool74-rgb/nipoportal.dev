@@ -23,8 +23,8 @@ export default function HomeClient({
   authenticatedRole = null,
 }: HomeClientProps) {
   const router = useRouter();
-  // Home Page Animation: always displays without missing on open and on logout
-  const [showSplash, setShowSplash] = useState(true);
+  // Home Page Animation: false by default to prevent blocking splash lag
+  const [showSplash, setShowSplash] = useState(false);
   const [targetDashboard, setTargetDashboard] = useState<string | null>(null);
 
   // On native mobile app, immediately hide the native container splash so the rich 3D web animation is visible

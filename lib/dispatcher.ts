@@ -756,11 +756,13 @@ export async function processNotificationOutbox(): Promise<{
           });
         } else {
           failed++;
+          const nextAttempts = item.attempts + 1;
+          const status = nextAttempts >= 5 ? "DEAD_LETTER" : "FAILED";
           await prisma.notificationOutbox.update({
             where: { id: item.id },
             data: {
-              status: "FAILED",
-              attempts: item.attempts + 1,
+              status,
+              attempts: nextAttempts,
               lastError: "Retry failed to reach device channels",
               processedAt: new Date(),
             },
@@ -768,11 +770,13 @@ export async function processNotificationOutbox(): Promise<{
         }
       } catch (itemErr: any) {
         failed++;
+        const nextAttempts = item.attempts + 1;
+        const status = nextAttempts >= 5 ? "DEAD_LETTER" : "FAILED";
         await prisma.notificationOutbox.update({
           where: { id: item.id },
           data: {
-            status: "FAILED",
-            attempts: item.attempts + 1,
+            status,
+            attempts: nextAttempts,
             lastError: sanitizeError(itemErr?.message),
             processedAt: new Date(),
           },
@@ -784,5 +788,21 @@ export async function processNotificationOutbox(): Promise<{
   } catch (err) {
     console.error("[Dispatcher] Error processing notification outbox:", err);
     return { processed: 0, succeeded: 0, failed: 0 };
+  }
+}
+
+/**
+ * Reset all DEAD_LETTER notifications back to PENDING so they can be retried.
+ */
+export async function retryDeadLetters(): Promise<{ count: number }> {
+  try {
+    const result = await prisma.notificationOutbox.updateMany({
+      where: { status: "DEAD_LETTER" },
+      data: { status: "PENDING", attempts: 0 },
+    });
+    return { count: result.count };
+  } catch (err) {
+    console.error("[Dispatcher] retryDeadLetters error:", err);
+    return { count: 0 };
   }
 }

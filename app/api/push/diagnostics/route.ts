@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
 import { prisma } from "@/backend/db/prisma";
-import { dispatchNotification, processNotificationOutbox } from "@/lib/dispatcher";
+import { dispatchNotification, processNotificationOutbox, retryDeadLetters } from "@/lib/dispatcher";
 import { ONESIGNAL_APP_ID } from "@/backend/services/push/oneSignalService";
 
 export const dynamic = "force-dynamic";
@@ -84,6 +84,9 @@ export async function GET(req: Request) {
       deviceRegistryCount,
       recentDeliveries,
       outboxPendingCount,
+      outboxDeadLetterCount,
+      outboxDelivered24hCount,
+      lastProcessedOutbox,
     ] = await Promise.all([
       prisma.pushSubscription.count(),
       prisma.pushSubscription.count({ where: { isActive: true } }),
@@ -102,6 +105,18 @@ export async function GET(req: Request) {
         orderBy: { createdAt: "desc" },
       }).catch(() => []),
       prisma.notificationOutbox.count({ where: { status: "PENDING" } }).catch(() => 0),
+      prisma.notificationOutbox.count({ where: { status: "DEAD_LETTER" } }).catch(() => 0),
+      prisma.notificationOutbox.count({
+        where: {
+          status: "COMPLETED",
+          processedAt: { gte: new Date(Date.now() - 24 * 3600 * 1000) },
+        },
+      }).catch(() => 0),
+      prisma.notificationOutbox.findFirst({
+        where: { processedAt: { not: null } },
+        orderBy: { processedAt: "desc" },
+        select: { processedAt: true },
+      }).catch(() => null),
     ]);
 
     // 3. Optional Per-User Diagnostics
@@ -196,6 +211,9 @@ export async function GET(req: Request) {
       },
       outbox: {
         pendingCount: outboxPendingCount,
+        deliveredLast24h: outboxDelivered24hCount,
+        deadLetterCount: outboxDeadLetterCount,
+        lastProcessedAt: lastProcessedOutbox?.processedAt || null,
       },
       deliveryTrace: {
         recentCount: recentDeliveries.length,
@@ -255,6 +273,16 @@ export async function POST(req: Request) {
         success: true,
         action: "retry_outbox",
         result,
+      });
+    }
+
+    if (action === "retry_dead_letter") {
+      const retried = await retryDeadLetters();
+      return NextResponse.json({
+        success: true,
+        action: "retry_dead_letter",
+        retriedCount: retried.count,
+        timestamp: new Date().toISOString(),
       });
     }
 
