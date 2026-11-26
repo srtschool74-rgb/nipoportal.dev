@@ -14,6 +14,7 @@ export interface OneSignalPushOptions {
   broadcast?: boolean; // When true, sends to all subscribed devices across the entire school app
   title: string;
   body: string;
+  image?: string;
   url?: string;
   unreadCount?: number;
   category?: string;
@@ -43,6 +44,7 @@ export async function sendOneSignalPush(
     broadcast = false,
     title,
     body,
+    image,
     url = "https://main.d3bt7u4517jg0f.amplifyapp.com",
     unreadCount = 1,
     category = "MESSAGE",
@@ -128,6 +130,14 @@ export async function sendOneSignalPush(
           url: resolvedUrl,
         },
       ],
+      ...(image
+        ? {
+            big_picture: image,
+            chrome_web_image: image,
+            adm_big_picture: image,
+            ios_attachments: { id: image },
+          }
+        : {}),
     };
 
     const authHeaders = [

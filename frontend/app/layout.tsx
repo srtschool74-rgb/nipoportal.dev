@@ -7,6 +7,7 @@ import { ToastProvider } from "@/frontend/components/ui/Toast";
 import SessionGuard from "@/frontend/components/auth/SessionGuard";
 import PwaRegistration from "@/frontend/components/pwa/PwaRegistration";
 import PwaWelcomeNotificationPrompt from "@/frontend/components/pwa/PwaWelcomeNotificationPrompt";
+import DashboardNotificationToaster from "@/frontend/components/notifications/DashboardNotificationToaster";
 import UnifiedInstallPrompt from "@/frontend/components/pwa/UnifiedInstallPrompt";
 import SilentSessionRefresher from "@/frontend/components/auth/SilentSessionRefresher";
 import OfflineBanner from "@/frontend/components/OfflineBanner";
@@ -270,6 +271,7 @@ export default async function RootLayout({
         <OfflineBanner />
         <PwaRegistration />
         <PwaWelcomeNotificationPrompt />
+        <DashboardNotificationToaster />
         <UnifiedInstallPrompt />
         <SilentSessionRefresher />
 

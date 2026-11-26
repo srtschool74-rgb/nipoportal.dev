@@ -1110,6 +1110,10 @@ model Message {
   isDeleted          Boolean   @default(false)
   deletedForSender   Boolean   @default(false)
   deletedForReceiver Boolean   @default(false)
+  clientMessageId    String?   @unique
+  status             String    @default("sent") // sent, delivered, read, failed
+  deliveredAt        DateTime?
+  readAt             DateTime?
   messageType        String    @default("TEXT") // TEXT, AUDIO, FILE, IMAGE
   fileUrl            String?
   fileName           String?
@@ -1177,6 +1181,7 @@ model Notification {
   isRead       Boolean   @default(false)
   readAt       DateTime? // Timestamp when notification was read (null = unread)
   deliveredAt  DateTime? // Timestamp when push notification was dispatched
+  shownAt      DateTime? // Timestamp when in-app dashboard pop-up was displayed to user (null = unseen)
   dedupeKey    String?   // Idempotency key (e.g. attendance:2026-04-14:student123)
   targetType   String?   // ALL, ROLE, CLASS, USER
   targetRole   String?
@@ -1211,6 +1216,7 @@ model PushSubscription {
   userAgent         String?
   deviceName        String?
   platform          String?   @default("WEB") // WEB | ANDROID | IOS
+  browser           String?   // chrome | edge | safari | firefox
   isActive          Boolean   @default(true)
   lastLoginAt       DateTime  @default(now())
   lastUsedAt        DateTime?

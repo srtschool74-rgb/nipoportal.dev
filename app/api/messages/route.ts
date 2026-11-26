@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
 import { prisma } from "@/backend/db/prisma";
-import { sendUniversalNotification } from "@/lib/notify";
+import { NotificationService } from "@/backend/services/notifications/NotificationService";
 
 export async function POST(request: Request) {
   try {
@@ -24,12 +24,53 @@ export async function POST(request: Request) {
       fileType = null, 
       duration = null,
       clientTempId = null,
+      clientMessageId = null,
       attachmentId = null,
       attachmentIds = []
     } = body;
 
+    const effectiveClientMessageId = clientMessageId || clientTempId || null;
+
     if (!receiverId) {
       return NextResponse.json({ error: "Receiver ID is required" }, { status: 400 });
+    }
+
+    // 1. Idempotency Check: if client sent clientMessageId, check if already exists
+    if (effectiveClientMessageId) {
+      const existingByClient = await prisma.message.findFirst({
+        where: {
+          senderId: session.user.id,
+          clientMessageId: effectiveClientMessageId,
+        },
+        select: {
+          id: true,
+          clientMessageId: true,
+          content: true,
+          senderId: true,
+          receiverId: true,
+          status: true,
+          isRead: true,
+          isDeleted: true,
+          messageType: true,
+          fileUrl: true,
+          fileName: true,
+          fileSize: true,
+          fileType: true,
+          duration: true,
+          editedAt: true,
+          deliveredAt: true,
+          readAt: true,
+          createdAt: true,
+        }
+      });
+
+      if (existingByClient) {
+        return NextResponse.json({
+          success: true,
+          message: existingByClient,
+          clientTempId: effectiveClientMessageId,
+        });
+      }
     }
 
     let effectiveFileUrl = fileUrl;
@@ -42,18 +83,6 @@ export async function POST(request: Request) {
       ...(attachmentId ? [attachmentId] : []),
       ...(Array.isArray(attachmentIds) ? attachmentIds : [])
     ];
-
-    console.log(`[POST /api/messages] Received send message request:`, {
-      senderId: session.user.id,
-      receiverId,
-      messageType,
-      fileName,
-      fileSize,
-      fileUrlPrefix: typeof fileUrl === "string" ? fileUrl.slice(0, 40) : null,
-      attachmentId,
-      allAttachmentCount: allAttachmentIds.length,
-      hasContent: Boolean(content),
-    });
 
     if (allAttachmentIds.length > 0) {
       const firstAtt = await prisma.attachment.findUnique({
@@ -82,7 +111,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Message content or attachment is required" }, { status: 400 });
     }
 
-    // Resolve recipient user ID (handling both direct User.id, Parent.id, or Teacher.id)
+    // Resolve recipient user ID (handling direct User.id, Parent.id, or Teacher.id)
     let targetReceiverId = receiverId;
     let receiver = await prisma.user.findUnique({
       where: { id: targetReceiverId },
@@ -90,7 +119,6 @@ export async function POST(request: Request) {
     });
 
     if (!receiver) {
-      // Check if receiverId is actually a Parent model ID
       const parentRecord = await prisma.parent.findUnique({
         where: { id: receiverId },
         select: { userId: true, user: { select: { id: true, role: true, name: true } } }
@@ -102,7 +130,6 @@ export async function POST(request: Request) {
     }
 
     if (!receiver) {
-      // Check if receiverId is actually a Teacher model ID
       const teacherRecord = await prisma.teacher.findUnique({
         where: { id: receiverId },
         select: { userId: true, user: { select: { id: true, role: true, name: true } } }
@@ -117,7 +144,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Recipient not found" }, { status: 404 });
     }
 
-    // Admins can only message teachers and parents
+    // Permission enforcement: Admins can only message teachers and parents
     if (session.user.role === "ADMIN" && receiver.role !== "TEACHER" && receiver.role !== "PARENT") {
       return NextResponse.json({ error: "Admins can only message teachers and parents." }, { status: 403 });
     }
@@ -132,35 +159,8 @@ export async function POST(request: Request) {
             : "Attachment"
     );
 
-    // Deduplication check: if client retried and message was already saved in last 10 seconds
-    const tenSecondsAgo = new Date(Date.now() - 10000);
-    const existing = await prisma.message.findFirst({
-      where: {
-        senderId: session.user.id,
-        receiverId: targetReceiverId,
-        content: finalContent,
-        createdAt: { gte: tenSecondsAgo },
-        ...(effectiveFileUrl ? { fileUrl: effectiveFileUrl } : {}),
-      },
-      select: {
-        id: true,
-        content: true,
-        senderId: true,
-        receiverId: true,
-        isRead: true,
-        isDeleted: true,
-        messageType: true,
-        fileUrl: true,
-        fileName: true,
-        fileSize: true,
-        fileType: true,
-        duration: true,
-        editedAt: true,
-        createdAt: true,
-      }
-    });
-
-    const message = existing || await prisma.message.create({
+    // 2. Fast Save in Database (<50ms) with clientMessageId and status "sent"
+    const message = await prisma.message.create({
       data: {
         senderId: session.user.id,
         receiverId: targetReceiverId,
@@ -171,13 +171,17 @@ export async function POST(request: Request) {
         fileSize: effectiveFileSize,
         fileType: effectiveFileType,
         duration,
+        clientMessageId: effectiveClientMessageId,
+        status: "sent",
         isRead: false,
       },
       select: {
         id: true,
+        clientMessageId: true,
         content: true,
         senderId: true,
         receiverId: true,
+        status: true,
         isRead: true,
         isDeleted: true,
         messageType: true,
@@ -187,62 +191,88 @@ export async function POST(request: Request) {
         fileType: true,
         duration: true,
         editedAt: true,
+        deliveredAt: true,
+        readAt: true,
         createdAt: true,
       }
     });
 
+    // 3. Link attachments asynchronously
     if (allAttachmentIds.length > 0) {
+      prisma.attachment.updateMany({
+        where: { id: { in: allAttachmentIds } },
+        data: { messageId: message.id, status: "READY" },
+      }).catch((attErr) => console.warn("[Messages] Attachment link note:", attErr));
+    }
+
+    // 4. Background Notification Dispatch (UNBLOCKING: does not hold up response)
+    const notifPromise = (async () => {
       try {
-        await prisma.attachment.updateMany({
-          where: { id: { in: allAttachmentIds } },
-          data: { messageId: message.id, status: "READY" },
+        let recipientLink = `/dashboard/parent/messages/${session.user.id}`;
+        if (receiver.role === "TEACHER") {
+          recipientLink = `/dashboard/teacher/messages/${session.user.id}`;
+        } else if (receiver.role === "ADMIN") {
+          recipientLink = `/dashboard/admin/messages/${session.user.id}`;
+        }
+
+        const senderDisplayName = session.user.name || "SRT School";
+        const senderRoleLabel = session.user.role === "ADMIN" 
+          ? "School Administration" 
+          : session.user.role === "TEACHER" 
+            ? "Faculty Teacher" 
+            : "Parent";
+
+        let notifTitle = `💬 Message from ${senderDisplayName} (${senderRoleLabel})`;
+        let notifBody = cleanContent;
+        let notifImage: string | undefined = undefined;
+
+        if (effectiveMessageType === "IMAGE" || (effectiveFileType && effectiveFileType.startsWith("image/"))) {
+          notifTitle = `📷 Photo from ${senderDisplayName}`;
+          notifBody = cleanContent ? `Photo: "${cleanContent}"` : "Sent a photo";
+          if (effectiveFileUrl && !effectiveFileUrl.startsWith("data:")) {
+            notifImage = effectiveFileUrl;
+          }
+        } else if (effectiveMessageType === "AUDIO") {
+          notifTitle = `🎤 Voice message from ${senderDisplayName}`;
+          notifBody = "Sent a voice message";
+        } else if (effectiveMessageType === "FILE" || effectiveFileUrl) {
+          notifTitle = `📎 File from ${senderDisplayName}`;
+          notifBody = `Sent a file: ${effectiveFileName || "attachment"}${cleanContent ? ` - "${cleanContent}"` : ""}`;
+        } else if (cleanContent.length > 100) {
+          notifBody = cleanContent.slice(0, 97) + "...";
+        }
+
+        await NotificationService.send({
+          recipients: [targetReceiverId],
+          type: "MESSAGE",
+          category: "MESSAGE",
+          title: notifTitle,
+          body: notifBody || `New message from ${senderDisplayName}`,
+          link: recipientLink,
+          image: notifImage,
+          dedupeKey: `chat-msg-${message.id}`,
+          priority: "HIGH",
+          data: {
+            messageId: message.id,
+            senderId: session.user.id,
+            conversationWith: session.user.id,
+            url: recipientLink,
+          },
         });
-      } catch (attErr) {
-        console.warn("[Messages] Attachment link warning:", attErr);
+      } catch (notifErr) {
+        console.error("[Messages] Background notification error:", notifErr);
       }
+    })();
+
+    if (typeof (globalThis as any).waitUntil === "function") {
+      (globalThis as any).waitUntil(notifPromise);
     }
 
-    // Deliver cross-platform notification (In-app + PC Web / iPhone Safari PWA + Android Capacitor)
-    // Strictly awaited so serverless functions (Vercel / Amplify) do not freeze or terminate early
-    try {
-      let recipientLink = `/dashboard/parent/messages/${session.user.id}`;
-      if (receiver.role === "TEACHER") {
-        recipientLink = `/dashboard/teacher/messages/${session.user.id}`;
-      } else if (receiver.role === "ADMIN") {
-        recipientLink = `/dashboard/admin/messages/${session.user.id}`;
-      }
-
-      const senderRoleLabel = session.user.role === "ADMIN" 
-        ? "School Administration" 
-        : session.user.role === "TEACHER" 
-          ? "Faculty Teacher" 
-          : "Parent";
-
-      const previewSnippet = messageType === "AUDIO" 
-        ? "Sent a voice message" 
-        : fileUrl 
-          ? `Sent an attachment: ${fileName || "file"}` 
-          : cleanContent.length > 100 
-            ? cleanContent.slice(0, 97) + "..." 
-            : cleanContent;
-
-      await sendUniversalNotification({
-        userId: targetReceiverId,
-        title: `💬 New Message from ${session.user.name || "Portal User"} (${senderRoleLabel})`,
-        body: `${session.user.name || "User"}: "${previewSnippet}"`,
-        category: "MESSAGE",
-        url: recipientLink,
-        tag: `chat-${session.user.id}-${Date.now()}`,
-        priority: "HIGH",
-      });
-    } catch (notifErr) {
-      console.error("[Messages] Notification delivery warning:", notifErr);
-    }
-
+    // 5. Instantly return 200 OK (<100ms) with message and clientTempId
     return NextResponse.json({
       success: true,
       message,
-      clientTempId,
+      clientTempId: effectiveClientMessageId,
     });
   } catch (error) {
     const e = error as Error;

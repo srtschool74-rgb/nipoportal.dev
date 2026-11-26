@@ -324,6 +324,7 @@ self.addEventListener("push", (event) => {
     let targetUrl = "/dashboard";
     let iconUrl = "/icon-192x192.png";
     let badgeUrl = "/badge-72x72.png";
+    let imageUrl = null;
     let tag = null;
     let notificationId = null;
     let unreadCount = 1;
@@ -333,6 +334,8 @@ self.addEventListener("push", (event) => {
         const payload = event.data.json();
         if (payload.title) title = payload.title;
         if (payload.body) body = payload.body;
+        if (payload.image) imageUrl = payload.image;
+        else if (payload.data && payload.data.image) imageUrl = payload.data.image;
         if (payload.url) targetUrl = payload.url;
         else if (payload.data && payload.data.url) targetUrl = payload.data.url;
         if (payload.icon) iconUrl = payload.icon;
@@ -404,8 +407,34 @@ self.addEventListener("push", (event) => {
         tag: tag,
         notificationId: notificationId,
         unreadCount: unreadCount,
+        image: imageUrl || undefined,
       },
     };
+
+    if (imageUrl) {
+      options.image = imageUrl;
+    }
+
+    // Broadcast to open tab clients so foreground in-app toasts appear immediately
+    try {
+      const windowClients = await clients.matchAll({ type: "window", includeUncontrolled: true });
+      for (const client of windowClients) {
+        client.postMessage({
+          type: "FOREGROUND_NOTIFICATION",
+          notification: {
+            id: notificationId,
+            title,
+            body,
+            url: targetUrl,
+            image: imageUrl,
+            tag,
+            unreadCount,
+          },
+        });
+      }
+    } catch (clientErr) {
+      console.debug("[ServiceWorker] Client broadcast note:", clientErr);
+    }
 
     try {
       await self.registration.showNotification(title, options);

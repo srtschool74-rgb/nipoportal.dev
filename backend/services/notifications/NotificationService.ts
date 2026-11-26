@@ -45,6 +45,7 @@ export interface SendNotificationOptions {
   type: NotificationType | string;
   title: string;
   body: string;
+  image?: string;
   link?: string;
   data?: Record<string, any>;
   priority?: "NORMAL" | "HIGH" | "URGENT";
@@ -110,6 +111,7 @@ export class NotificationService {
       type = "GENERAL",
       title,
       body,
+      image,
       link = "/dashboard",
       data = {},
       priority = "NORMAL",
@@ -312,6 +314,7 @@ export class NotificationService {
       const pushPayload = JSON.stringify({
         title,
         body,
+        image: image || undefined,
         url: link,
         unreadCount: 1,
         badgeCount: 1,
@@ -324,6 +327,7 @@ export class NotificationService {
           type: normalizedType,
           category: normalizedCategory,
           tag: stableTag,
+          image: image || undefined,
           ...data,
         },
       });
@@ -363,6 +367,7 @@ export class NotificationService {
         userId: eligibleUserIds,
         title,
         body,
+        image,
         url: link,
         unreadCount: 1,
         category: normalizedCategory,
@@ -370,6 +375,7 @@ export class NotificationService {
           notificationId: firstNotificationId,
           type: normalizedType,
           tag: stableTag,
+          image,
           ...data,
         },
       }).then((res) => {

@@ -68,29 +68,35 @@ export async function GET(request: Request) {
 
     // On initial load without `since`, fetch the latest 100 messages in reverse chronological order
     // then sort ascending for the UI. On incremental sync, fetch up to 100 new messages.
+    const messageFields = {
+      id: true,
+      clientMessageId: true,
+      content: true,
+      senderId: true,
+      receiverId: true,
+      status: true,
+      isRead: true,
+      isDeleted: true,
+      messageType: true,
+      fileUrl: true,
+      fileName: true,
+      fileSize: true,
+      fileType: true,
+      duration: true,
+      editedAt: true,
+      deliveredAt: true,
+      readAt: true,
+      createdAt: true,
+      attachments: { select: { id: true }, take: 1 },
+    };
+
     let messages: any[] = [];
     if (!since) {
       const recentDesc = await prisma.message.findMany({
         where: { AND: conditions },
         orderBy: { createdAt: "desc" },
         take: 100,
-        select: {
-          id: true,
-          content: true,
-          senderId: true,
-          receiverId: true,
-          isRead: true,
-          isDeleted: true,
-          messageType: true,
-          fileUrl: true,
-          fileName: true,
-          fileSize: true,
-          fileType: true,
-          duration: true,
-          editedAt: true,
-          createdAt: true,
-          attachments: { select: { id: true }, take: 1 },
-        }
+        select: messageFields,
       });
       messages = recentDesc.reverse();
     } else {
@@ -98,25 +104,11 @@ export async function GET(request: Request) {
         where: { AND: conditions },
         orderBy: { createdAt: "asc" },
         take: 100,
-        select: {
-          id: true,
-          content: true,
-          senderId: true,
-          receiverId: true,
-          isRead: true,
-          isDeleted: true,
-          messageType: true,
-          fileUrl: true,
-          fileName: true,
-          fileSize: true,
-          fileType: true,
-          duration: true,
-          editedAt: true,
-          createdAt: true,
-          attachments: { select: { id: true }, take: 1 },
-        }
+        select: messageFields,
       });
     }
+
+    const now = new Date();
 
     // Mark unread received messages as read
     const unreadReceivedIds = messages
@@ -127,7 +119,11 @@ export async function GET(request: Request) {
       await Promise.all([
         prisma.message.updateMany({
           where: { id: { in: unreadReceivedIds } },
-          data: { isRead: true }
+          data: {
+            isRead: true,
+            status: "read",
+            readAt: now,
+          }
         }),
         prisma.notification.updateMany({
           where: {
@@ -136,7 +132,7 @@ export async function GET(request: Request) {
             link: { contains: otherUserId },
             isRead: false,
           },
-          data: { isRead: true }
+          data: { isRead: true, readAt: now }
         })
       ]);
 
@@ -145,12 +141,30 @@ export async function GET(request: Request) {
         await invalidateUserNotifCache(currentUserId);
       } catch {}
 
-      // Reflect isRead in returned list
+      // Reflect isRead and read status in returned list
       unreadReceivedIds.forEach(id => {
         const found = messages.find(m => m.id === id);
-        if (found) found.isRead = true;
+        if (found) {
+          found.isRead = true;
+          found.status = "read";
+          found.readAt = now;
+        }
       });
     }
+
+    // Mark incoming messages as delivered if still marked "sent"
+    await prisma.message.updateMany({
+      where: {
+        receiverId: currentUserId,
+        senderId: otherUserId,
+        status: "sent",
+        isRead: false,
+      },
+      data: {
+        status: "delivered",
+        deliveredAt: now,
+      }
+    }).catch(() => {});
 
     // Cleanse any legacy Base64 Data URIs to prevent CloudFront JSON payload bloat
     const sanitizedMessages = messages.map(m => {

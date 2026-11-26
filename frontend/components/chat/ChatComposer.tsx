@@ -74,8 +74,8 @@ async function compressImageIfNeeded(file: File): Promise<File> {
     img.onload = () => {
       URL.revokeObjectURL(objectUrl);
       try {
-        const MAX_WIDTH = 1920;
-        const MAX_HEIGHT = 1920;
+        const MAX_WIDTH = 1600;
+        const MAX_HEIGHT = 1600;
         let width = img.width;
         let height = img.height;
 
@@ -119,7 +119,7 @@ async function compressImageIfNeeded(file: File): Promise<File> {
             }
           },
           outputFormat,
-          0.85
+          0.80
         );
       } catch {
         resolve(file);
@@ -481,7 +481,12 @@ export default function ChatComposer({
           });
           return [];
         });
-        if (textareaRef.current) textareaRef.current.style.height = "auto";
+        if (textareaRef.current) {
+          textareaRef.current.style.height = "auto";
+          try {
+            textareaRef.current.focus();
+          } catch {}
+        }
       } else {
         setComposerError("Failed to deliver message. Click Retry on the message or check your connection.");
       }

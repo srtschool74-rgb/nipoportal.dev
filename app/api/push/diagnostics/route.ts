@@ -24,12 +24,14 @@ export async function GET(req: Request) {
     const cronSecret = process.env.CRON_SECRET;
     const isCronAuthed = cronSecret && authHeader === `Bearer ${cronSecret}`;
 
-    if (!isCronAuthed && (!session || !session.user || session.user.role !== "ADMIN")) {
-      return NextResponse.json({ error: "Unauthorized. Admin access required." }, { status: 401 });
+    if (!isCronAuthed && (!session || !session.user)) {
+      return NextResponse.json({ error: "Unauthorized. Please log in." }, { status: 401 });
     }
 
     const { searchParams } = new URL(req.url);
-    const targetUserId = searchParams.get("userId");
+    const isAdmin = isCronAuthed || session?.user?.role === "ADMIN";
+    // Non-admin users are strictly scoped to their own account diagnostics
+    const targetUserId = isAdmin ? searchParams.get("userId") : (session?.user?.id || null);
     const statusFilter = searchParams.get("status");
     const typeFilter = searchParams.get("type");
 

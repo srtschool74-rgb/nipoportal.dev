@@ -116,9 +116,8 @@ export default function ChatThreadClient({
             const optimisticMatch = prev.find(
               (m) =>
                 m.status === "sending" &&
-                m.senderId === nm.senderId &&
-                m.receiverId === nm.receiverId &&
-                m.content === nm.content
+                ((nm.clientMessageId && (m.clientTempId === nm.clientMessageId || m.id === nm.clientMessageId)) ||
+                 (m.senderId === nm.senderId && m.receiverId === nm.receiverId && m.content === nm.content))
             );
             if (optimisticMatch) {
               existingMap.delete(optimisticMatch.id);
@@ -128,10 +127,18 @@ export default function ChatThreadClient({
               existingMap.set(nm.id, nm);
               hasNewArrival = true;
             } else {
-              // Update status or isRead if changed
+              // Update status, isRead, deliveredAt, readAt, isDeleted if changed
               const existing = existingMap.get(nm.id);
-              if (existing && (existing.isRead !== nm.isRead || existing.isDeleted !== nm.isDeleted)) {
-                existingMap.set(nm.id, { ...existing, isRead: nm.isRead, isDeleted: nm.isDeleted });
+              if (
+                existing &&
+                (existing.isRead !== nm.isRead ||
+                 existing.status !== nm.status ||
+                 existing.isDeleted !== nm.isDeleted ||
+                 existing.deliveredAt !== nm.deliveredAt ||
+                 existing.readAt !== nm.readAt)
+              ) {
+                existingMap.set(nm.id, { ...existing, ...nm });
+                hasNewArrival = true;
               }
             }
           });
@@ -283,7 +290,12 @@ export default function ChatThreadClient({
         attachmentId: payload.attachmentId,
       });
 
-      const data = await apiFetch<{
+      // 2. Dispatch to backend API with a strict 10-second timeout guarantee
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("Message delivery timed out (10s). Tap Retry.")), 10000)
+      );
+
+      const fetchPromise = apiFetch<{
         success: boolean;
         message: any;
       }>("/api/messages", {
@@ -301,8 +313,11 @@ export default function ChatThreadClient({
           attachmentId: payload.attachmentId,
           attachmentIds: payload.attachmentIds,
           clientTempId: tempId,
+          clientMessageId: tempId,
         }),
       });
+
+      const data = await Promise.race([fetchPromise, timeoutPromise]);
 
       if (!data?.success || !data?.message) {
         throw new Error("Failed to send message");
@@ -355,7 +370,11 @@ export default function ChatThreadClient({
         attachmentId: failedMsg.attachmentId,
       });
 
-      const data = await apiFetch<{
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("Retry delivery timed out (10s). Tap Retry.")), 10000)
+      );
+
+      const fetchPromise = apiFetch<{
         success: boolean;
         message: any;
       }>("/api/messages", {
@@ -372,8 +391,11 @@ export default function ChatThreadClient({
           duration: failedMsg.duration,
           attachmentId: failedMsg.attachmentId,
           clientTempId: failedMsg.clientTempId || failedMsg.id,
+          clientMessageId: failedMsg.clientTempId || failedMsg.id,
         }),
       });
+
+      const data = await Promise.race([fetchPromise, timeoutPromise]);
 
       if (!data?.success || !data?.message) {
         throw new Error("Failed to send message on retry");

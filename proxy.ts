@@ -208,15 +208,16 @@ export async function proxy(req: NextRequest) {
       pathname === "/api/auth/callback/credentials" ||
       pathname === "/api/auth/signin";
 
-    // Polling, health checks, and chunked upload streaming have dedicated higher capacity
-    // to prevent real-time chat sync or file chunk transfers from consuming the mutation rate limit
+    // Polling, messaging, notifications, health checks, and chunked upload streaming have dedicated higher capacity
+    // to prevent real-time chat sync or push registrations from consuming the mutation rate limit
     const isHighFrequencyInternal =
-      pathname.startsWith("/api/messages/thread") ||
-      pathname.startsWith("/api/notifications/unread-count") ||
+      pathname.startsWith("/api/messages") ||
+      pathname.startsWith("/api/notifications") ||
+      pathname.startsWith("/api/push") ||
       pathname.startsWith("/api/auth/session-status") ||
       pathname.startsWith("/api/health") ||
       pathname.startsWith("/api/transport/bus-trigger") ||
-      pathname.startsWith("/api/uploads/stream");
+      pathname.startsWith("/api/uploads");
 
     // 5 req/min on login routes, 30 req/min on general /api/* routes
     const limit = isAuthLogin ? 5 : 30;
@@ -342,8 +343,8 @@ export async function proxy(req: NextRequest) {
 export const config = {
   matcher: [
     /*
-     * Match all request paths except static files and media
+     * Match all request paths except static files, service workers, manifests, and media
      */
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|txt|webmanifest)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|sw\\.js|OneSignalSDKWorker\\.js|manifest\\.json|manifest\\.webmanifest|offline\\.html|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|txt|webmanifest)$).*)",
   ],
 };

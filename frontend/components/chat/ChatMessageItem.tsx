@@ -17,6 +17,7 @@ import VoiceNotePlayer from "./VoiceNotePlayer";
 export interface ChatMessage {
   id: string;
   clientTempId?: string;
+  clientMessageId?: string;
   content: string;
   senderId: string;
   receiverId: string;
@@ -30,8 +31,10 @@ export interface ChatMessage {
   duration?: number | null;
   attachmentId?: string | null;
   editedAt?: Date | string | null;
+  deliveredAt?: Date | string | null;
+  readAt?: Date | string | null;
   createdAt: Date | string;
-  status?: "sending" | "sent" | "failed";
+  status?: "sending" | "sent" | "delivered" | "read" | "failed";
   errorMessage?: string;
 }
 
@@ -245,7 +248,7 @@ export default function ChatMessageItem({
           {message.editedAt && <span>(edited)</span>}
           <span>{formatTimestamp(message.createdAt)}</span>
 
-          {/* Status Checkmarks for Sender */}
+          {/* WhatsApp-Style Status Checkmarks for Sender */}
           {isMine && !message.isDeleted && (
             <span>
               {isPending && <Clock size={12} style={{ opacity: 0.8 }} />}
@@ -279,12 +282,19 @@ export default function ChatMessageItem({
                 </span>
               )}
               {message.status !== "sending" && !isFailed && (
-                message.isRead ? (
-                  <span title="Read" style={{ display: "inline-flex" }}>
+                (message.isRead || message.status === "read") ? (
+                  <span title={`Read${message.readAt ? ` at ${formatTimestamp(message.readAt)}` : ""}`} style={{ display: "inline-flex" }}>
+                    {/* Double blue ticks: read by recipient */}
                     <CheckCheck size={14} style={{ color: isMine ? "#38bdf8" : "#0284c7" }} />
                   </span>
+                ) : message.status === "delivered" ? (
+                  <span title={`Delivered${message.deliveredAt ? ` at ${formatTimestamp(message.deliveredAt)}` : ""}`} style={{ display: "inline-flex" }}>
+                    {/* Double grey ticks: delivered to device */}
+                    <CheckCheck size={14} style={{ opacity: 0.75, color: isMine ? "rgba(255, 255, 255, 0.75)" : "#64748b" }} />
+                  </span>
                 ) : (
-                  <span title="Sent" style={{ display: "inline-flex" }}>
+                  <span title="Sent to server" style={{ display: "inline-flex" }}>
+                    {/* Single tick: sent to server */}
                     <Check size={14} style={{ opacity: 0.75 }} />
                   </span>
                 )

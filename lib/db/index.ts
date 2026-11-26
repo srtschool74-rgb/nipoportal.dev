@@ -14,17 +14,13 @@ const globalForDb = globalThis as unknown as {
 export function sanitizeConnectionUrl(rawUrl: string): string {
   let url = rawUrl;
 
-  // Supabase Supavisor: port 5432 is Session mode (capped at 15 clients).
-  // Port 6543 is Transaction mode (supports thousands of concurrent serverless clients).
-  if (url.includes("supabase.com") || url.includes("supabase.co") || url.includes("pooler.supabase.com")) {
+  // If SUPABASE_USE_PORT_6543 is explicitly enabled, use port 6543; otherwise respect the configured port (e.g. 5432)
+  if (process.env.SUPABASE_USE_PORT_6543 === "true" && url.includes(":5432")) {
     url = url.replace(":5432", ":6543");
-    if (!url.includes("pgbouncer=true")) {
-      url += (url.includes("?") ? "&" : "?") + "pgbouncer=true";
-    }
   }
 
   // Transaction pooler (port 6543 / pooler.supabase.com) requires pgbouncer=true in Prisma
-  if (url.includes("6543") || url.includes("pooler.supabase.com") || url.includes("pgbouncer")) {
+  if (url.includes("6543") || url.includes("pgbouncer")) {
     if (!url.includes("pgbouncer=true")) {
       url += (url.includes("?") ? "&" : "?") + "pgbouncer=true";
     }
