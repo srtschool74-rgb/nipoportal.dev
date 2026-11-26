@@ -19,6 +19,7 @@ import ThemeToggle from "@/frontend/components/ThemeToggle";
 import SrtLogo from "@/frontend/components/ui/SrtLogo";
 import LoginPwaPrompt from "@/frontend/components/pwa/LoginPwaPrompt";
 import { persistNativeSession } from "@/frontend/lib/authPersistence";
+import { resolveUserRoleAction } from "@/backend/api/actions/auth/resolveRoleAction";
 
 interface ModernLoginFormProps {
   schoolName?: string;
@@ -211,34 +212,30 @@ export default function ModernLoginForm({
           sessionStorage.setItem("srt_bento_cascade", "true");
         } catch {}
 
-        // Direct fast-path routing: eliminates double-redirect delay
-        let target = "/dashboard";
+        // Direct fast-path routing: eliminates double-redirect delay and eliminates /dashboard white loading screen
+        let target = "";
         if (defaultRole) {
           target = `/dashboard/${defaultRole.toLowerCase()}`;
         } else {
           try {
-            const sessRes = await fetch("/api/auth/session");
-            if (sessRes.ok) {
-              const sess = await sessRes.json();
-              if (sess?.user) {
-                persistNativeSession({
-                  userId: sess.user.id,
-                  role: sess.user.role || "USER",
-                  name: sess.user.name,
-                  email: sess.user.email,
-                  loginTimestamp: Date.now(),
-                }).catch(() => {});
-              }
-              if (sess?.user?.role) {
-                const r = sess.user.role.toUpperCase();
-                if (r === "STAFF" || r === "NON_TEACHING_STAFF") {
-                  target = "/staff/my-bus";
-                } else {
-                  target = `/dashboard/${sess.user.role.toLowerCase()}`;
-                }
+            const resolvedRole = await resolveUserRoleAction(email.trim());
+            if (resolvedRole) {
+              const r = resolvedRole.toUpperCase();
+              if (r === "STAFF" || r === "NON_TEACHING_STAFF") {
+                target = "/staff/my-bus";
+              } else {
+                target = `/dashboard/${r.toLowerCase()}`;
               }
             }
           } catch {}
+
+          if (!target) {
+            const cleanLower = email.trim().toLowerCase();
+            if (cleanLower.includes("admin")) target = "/dashboard/admin";
+            else if (cleanLower.includes("teacher")) target = "/dashboard/teacher";
+            else if (cleanLower.includes("parent")) target = "/dashboard/parent";
+            else target = "/dashboard/parent";
+          }
         }
 
         // Instant Next.js Client Routing - Pre-warms target and eliminates white page reload

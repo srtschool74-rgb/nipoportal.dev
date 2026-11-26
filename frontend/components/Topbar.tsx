@@ -126,24 +126,51 @@ export default function Topbar({
         }
       }
 
+      // Trigger immediate native system notification on this device
+      try {
+        if (typeof Notification !== "undefined" && Notification.permission === "granted") {
+          const notifTitle = "🔔 SRT Universal School";
+          const notifBody = `${user.name || "Administrator"}: System notifications & lock-screen alerts are fully active!`;
+          if (navigator.serviceWorker && "getRegistration" in navigator.serviceWorker) {
+            const reg = await navigator.serviceWorker.ready;
+            if (reg && "showNotification" in reg) {
+              await reg.showNotification(notifTitle, {
+                body: notifBody,
+                icon: "/icon-192x192.png",
+                badge: "/badge-72x72.png",
+                vibrate: [200, 100, 200],
+                tag: "srt-system-test-alert",
+              } as any);
+            } else {
+              new Notification(notifTitle, { body: notifBody, icon: "/icon-192x192.png" });
+            }
+          } else {
+            new Notification(notifTitle, { body: notifBody, icon: "/icon-192x192.png" });
+          }
+        }
+      } catch (osErr) {
+        console.warn("[Topbar] Native notification display note:", osErr);
+      }
+
+      const isBroadcast = user.role === "ADMIN";
       const res = await fetch("/api/push/test", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          title: "🔔 SRT Portal Test",
+          title: "🔔 SRT Portal Alert",
           message: `${user.name || "User"} (${user.role || "User"}): Push & Lock-screen alerts are 100% active!`,
           url: "/dashboard",
-          broadcast: false,
+          broadcast: isBroadcast,
         }),
       });
       const data = await res.json().catch(() => ({}));
 
       if (res.ok && data.success) {
         setTestPushSuccess(true);
-        setToastMessage("🔔 Lock-screen test notification sent to your device!");
+        setToastMessage(isBroadcast ? "🔔 System notification shown & broadcast dispatched to all users!" : "🔔 Lock-screen test notification sent to your device!");
         setTimeout(() => setTestPushSuccess(false), 2500);
       } else {
-        setToastMessage("🔔 Device registered & test alert dispatched!");
+        setToastMessage(isBroadcast ? "🔔 System alert displayed & broadcast sent!" : "🔔 Device registered & test alert dispatched!");
       }
       setTimeout(() => setToastMessage(null), 3500);
     } catch {
