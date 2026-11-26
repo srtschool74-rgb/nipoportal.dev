@@ -46,7 +46,7 @@ const DEFAULT_URL =
   process.env.BACKEND_URL ||
   process.env.RENDER_BACKEND_URL ||
   process.env.TARGET_URL ||
-  "https://nipoportal.dev.onrender.com";
+  "https://nipoportal-dev.onrender.com";
 
 const DEFAULT_PATH = "/api/health/live";
 const MIN_INTERVAL_MINUTES = 5;
