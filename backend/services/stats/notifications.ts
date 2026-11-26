@@ -28,16 +28,24 @@ export async function getUnreadNotificationStats(
       ? { createdAt: { gt: options.clearedAfter } }
       : {};
 
-  const [notifCounts, unreadMessagesCount] = await Promise.all([
-    prisma.notification.groupBy({
-      by: ["category"],
+  // Single fast indexed queries (count only, no row loading or heavy groupBy hash aggregation)
+  const [notificationCountRaw, busAlertCountRaw, unreadMessagesCountRaw] = await Promise.all([
+    prisma.notification.count({
       where: {
         userId,
         readAt: null,
         isRead: false,
         ...clearedFilter,
       },
-      _count: { _all: true },
+    }),
+    prisma.notification.count({
+      where: {
+        userId,
+        readAt: null,
+        isRead: false,
+        category: "BUS",
+        ...clearedFilter,
+      },
     }),
     prisma.message.count({
       where: {
@@ -49,18 +57,9 @@ export async function getUnreadNotificationStats(
     }),
   ]);
 
-  let notificationCount = 0;
-  let busAlertCount = 0;
-
-  for (const row of notifCounts) {
-    const c = Math.max(0, row._count._all);
-    notificationCount += c;
-    if (row.category === "BUS") {
-      busAlertCount += c;
-    }
-  }
-
-  const messageCount = Math.max(0, unreadMessagesCount);
+  const notificationCount = Math.max(0, notificationCountRaw);
+  const busAlertCount = Math.max(0, busAlertCountRaw);
+  const messageCount = Math.max(0, unreadMessagesCountRaw);
   const unreadCount = Math.max(0, notificationCount + messageCount);
 
   return {

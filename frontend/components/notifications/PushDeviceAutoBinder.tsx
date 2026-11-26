@@ -36,10 +36,8 @@ export default function PushDeviceAutoBinder({ userId }: { userId: string }) {
   useEffect(() => {
     if (typeof window === "undefined" || !userId) return;
 
-    // Immediately bind user to OneSignal and Push Notifications on any device visit
-    initPushNotifications(userId).catch(() => {});
+    // Bind user to Push Notifications & OneSignal (guarded, once per session)
     loginToPushService(userId).catch(() => {});
-    loginToOneSignal(userId).catch(() => {});
 
     // Check if running inside Capacitor native platform
     const isCapacitor = Boolean(

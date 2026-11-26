@@ -51,6 +51,34 @@ self.addEventListener("activate", (event) => {
   );
 });
 
+// Immediate Activation, Cache Management, and Badging Message Listener (Top-level evaluation)
+self.addEventListener("message", (event) => {
+  if (event.data) {
+    if (event.data.type === "SKIP_WAITING") {
+      self.skipWaiting();
+    }
+    if (event.data.type === "CLEAR_CACHES") {
+      caches.keys().then((keys) => Promise.all(keys.map((k) => caches.delete(k))));
+    }
+    if (event.data.type === "SET_BADGE") {
+      const c = event.data.count || 0;
+      setStoredBadgeCount(c).then((newCount) => {
+        applyAppBadge(newCount);
+      });
+    }
+    if (event.data.type === "CLEAR_BADGE") {
+      removeAppBadge();
+    }
+    if (event.data.type === "GET_BADGE") {
+      getStoredBadgeCount().then((count) => {
+        if (event.source && event.source.postMessage) {
+          event.source.postMessage({ type: "BADGE_COUNT_RESPONSE", count });
+        }
+      });
+    }
+  }
+});
+
 // ============================================================================
 // INDEXEDDB UNREAD BADGE COUNTER & BADGING API ENGINE
 // Maintains persistent unread count for OS app icon badges even when app is closed
@@ -149,33 +177,7 @@ async function broadcastBadgeToClients(count) {
   } catch { }
 }
 
-// Immediate Activation, Cache Management, and Badging Message Listener
-self.addEventListener("message", (event) => {
-  if (event.data) {
-    if (event.data.type === "SKIP_WAITING") {
-      self.skipWaiting();
-    }
-    if (event.data.type === "CLEAR_CACHES") {
-      caches.keys().then((keys) => Promise.all(keys.map((k) => caches.delete(k))));
-    }
-    if (event.data.type === "SET_BADGE") {
-      const c = event.data.count || 0;
-      setStoredBadgeCount(c).then((newCount) => {
-        applyAppBadge(newCount);
-      });
-    }
-    if (event.data.type === "CLEAR_BADGE") {
-      removeAppBadge();
-    }
-    if (event.data.type === "GET_BADGE") {
-      getStoredBadgeCount().then((count) => {
-        if (event.source && event.source.postMessage) {
-          event.source.postMessage({ type: "BADGE_COUNT_RESPONSE", count });
-        }
-      });
-    }
-  }
-});
+
 
 // Background Sync & Periodic Sync for Midnight Master State Refresh
 self.addEventListener("sync", (event) => {
@@ -205,29 +207,39 @@ self.addEventListener("fetch", (event) => {
 
   const url = new URL(request.url);
 
-  // SECURITY GUARD: Never intercept or cache API, NextAuth, or real-time routes
-  if (
+  // SECURITY GUARD: Never intercept or cache API, NextAuth, authenticated routes, or Next.js RSC router fetches
+  const isRSC =
+    url.searchParams.has("_rsc") ||
+    request.headers.get("RSC") === "1" ||
+    request.headers.get("Next-Router-Prefetch") === "1";
+  const isAuthOrPrivate =
     url.pathname.startsWith("/api/") ||
     url.pathname.includes("/auth/") ||
+    url.pathname.startsWith("/dashboard") ||
+    url.pathname.startsWith("/admin") ||
+    url.pathname.startsWith("/teacher") ||
+    url.pathname.startsWith("/parent") ||
     url.pathname.includes("session") ||
     url.pathname.includes("token") ||
-    url.searchParams.has("nocache")
-  ) {
-    return; // Pass through to network directly
+    url.searchParams.has("nocache") ||
+    isRSC;
+
+  if (isAuthOrPrivate && request.mode !== "navigate") {
+    return; // Pass through to network directly, never cache in SW or return 408
   }
 
-  // Handle HTML Page Navigations: Resilient Network-First with Safe Fallback
-  // NEVER reject and NEVER abort prematurely, ensuring the home page always loads smoothly on phones!
+  // Handle HTML Page Navigations: Network-First with a 6-second timeout before offline fallback
   if (request.mode === "navigate") {
     event.respondWith(
-      fetch(request)
-        .then((networkResponse) => {
-          // Live server response succeeded - return directly to the browser
+      (async () => {
+        try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 6000);
+          const networkResponse = await fetch(request, { signal: controller.signal });
+          clearTimeout(timeoutId);
           return networkResponse;
-        })
-        .catch(async (fetchError) => {
-          console.warn("[SW] Navigation network fetch failed, using fallback:", fetchError);
-          // Network failed (offline or network error) - fallback to cached offline shell
+        } catch (fetchError) {
+          console.warn("[SW] Navigation network fetch failed or timed out, using fallback:", fetchError);
           try {
             const cache = await caches.open(CACHE_NAME);
             const cachedOffline = await cache.match("/offline.html");
@@ -265,7 +277,8 @@ self.addEventListener("fetch", (event) => {
               headers: { "Content-Type": "text/html; charset=utf-8" },
             }
           );
-        })
+        }
+      })()
     );
     return;
   }
@@ -304,11 +317,16 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Default: Network with cache fallback
+  // Default: Network with cache fallback - NEVER inject synthetic 408
   event.respondWith(
     fetch(request).catch(async () => {
       const cached = await caches.match(request);
-      return cached || new Response("", { status: 408, statusText: "Network Timeout" });
+      if (cached) return cached;
+      return new Response("Offline resource unavailable", {
+        status: 503,
+        statusText: "Service Unavailable",
+        headers: { "Content-Type": "text/plain" },
+      });
     })
   );
 });

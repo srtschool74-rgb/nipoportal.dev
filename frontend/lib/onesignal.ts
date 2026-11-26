@@ -8,9 +8,11 @@ export const ONESIGNAL_APP_ID =
 
 let isInitialized = false;
 let initPromise: Promise<void> | null = null;
+let currentLoggedInUserId: string | null = null;
+let inFlightLoginPromise: Promise<boolean> | null = null;
 
 /**
- * Initialize OneSignal Web SDK v16 with App ID: 721f0fa5-683c-4edc-93ce-35a8786d655b
+ * Initialize OneSignal Web SDK v16 once per browser session
  */
 export async function initOneSignal(): Promise<void> {
   if (typeof window === "undefined") return;
@@ -48,24 +50,53 @@ export async function initOneSignal(): Promise<void> {
 
 /**
  * Link the logged-in user's device directly to their PostgreSQL user.id (external_id)
+ * Guarded: calls init once, runs login once per session, and deduplicates parallel requests
  */
 export async function loginToOneSignal(userId: string): Promise<boolean> {
   if (typeof window === "undefined" || !userId) return false;
-  try {
-    await initOneSignal();
-    const cleanId = String(userId).trim();
-    const win = window as any;
-    if (win.OneSignal && typeof win.OneSignal.login === "function") {
-      await win.OneSignal.login(cleanId);
-    } else {
-      await OneSignal.login(cleanId);
-    }
-    console.log("[OneSignal] User linked with external_id:", cleanId);
+  const cleanId = String(userId).trim();
+  if (!cleanId) return false;
+
+  // Once-per-session guard: If already logged in as this user, don't repeat
+  if (currentLoggedInUserId === cleanId) {
     return true;
-  } catch (err) {
-    console.warn("[OneSignal] Login link warning:", err);
-    return false;
   }
+
+  // Prevent duplicate parallel login calls
+  if (inFlightLoginPromise) {
+    return inFlightLoginPromise;
+  }
+
+  inFlightLoginPromise = (async () => {
+    try {
+      await initOneSignal();
+      const win = window as any;
+      const osInstance = win.OneSignal || OneSignal;
+
+      if (osInstance && typeof osInstance.login === "function") {
+        await osInstance.login(cleanId);
+        currentLoggedInUserId = cleanId;
+        console.log("[OneSignal] User linked with external_id:", cleanId);
+        return true;
+      }
+      return false;
+    } catch (err: any) {
+      // Catch internal OneSignal SDK language/translation undefined property gracefully
+      if (
+        err?.message?.includes("Cannot read properties of undefined (reading 'en')") ||
+        String(err).includes("reading 'en'")
+      ) {
+        currentLoggedInUserId = cleanId;
+        return true;
+      }
+      console.warn("[OneSignal] Login link warning:", err);
+      return false;
+    } finally {
+      inFlightLoginPromise = null;
+    }
+  })();
+
+  return inFlightLoginPromise;
 }
 
 /**
@@ -73,6 +104,9 @@ export async function loginToOneSignal(userId: string): Promise<boolean> {
  */
 export async function logoutFromOneSignal(): Promise<void> {
   if (typeof window === "undefined") return;
+  currentLoggedInUserId = null;
+  inFlightLoginPromise = null;
+
   try {
     const win = window as any;
     if (win.OneSignal && typeof win.OneSignal.logout === "function") {

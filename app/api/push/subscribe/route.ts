@@ -69,7 +69,23 @@ export async function POST(req: Request) {
 
     const resolvedBodyUserId =
       typeof bodyUserId === "string" && bodyUserId.trim() ? bodyUserId.trim() : null;
-    const finalUserId = authenticatedUserId || resolvedBodyUserId || existingSub?.userId || null;
+    let finalUserId = authenticatedUserId || resolvedBodyUserId || existingSub?.userId || null;
+
+    // Verify foreign key: ensure finalUserId actually exists in User table to prevent P2003 constraint failure
+    if (finalUserId) {
+      try {
+        const userExists = await prisma.user.findUnique({
+          where: { id: finalUserId },
+          select: { id: true },
+        });
+        if (!userExists) {
+          finalUserId = null;
+        }
+      } catch {
+        finalUserId = null;
+      }
+    }
+
     const now = new Date();
 
     const subscription = await prisma.pushSubscription.upsert({

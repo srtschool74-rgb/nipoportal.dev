@@ -7,6 +7,13 @@ import { Bell, Send, CheckCircle2 } from "lucide-react";
 import { useEffect, useState, useCallback } from "react";
 import { setAppBadgeCount, clearAppBadgeCount } from "@/frontend/lib/pwa/badgeManager";
 import RoleSwitcher from "@/frontend/components/auth/RoleSwitcher";
+import {
+  getUnreadNotificationStats,
+  subscribeToUnreadStats,
+  resetUnreadStatsLocally,
+  updateUnreadStatsLocally,
+  type UnreadStats,
+} from "@/frontend/lib/notifications/unreadCountPoller";
 
 // Matches the key used in NotificationPopupModal
 const CLEARED_KEY = "srt_portal_notif_cleared_v1";
@@ -21,10 +28,6 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
   }
   return outputArray;
 }
-
-// Module-level in-flight request deduplicator to prevent parallel calls
-let inFlightUnreadPromise: Promise<{ unreadCount: number; hasBusAlert: boolean } | null> | null = null;
-let lastUnreadFetchTime = 0;
 
 export default function Topbar({
   user,
@@ -182,84 +185,40 @@ export default function Topbar({
     }
   };
 
-  // Smart Function to poll unread count & bus alerts with request deduplication
-  const checkNotifications = useCallback(async (signal?: AbortSignal) => {
-    if (typeof document !== "undefined" && document.hidden) return;
-
-    const now = Date.now();
-    // Throttle to at most once every 10 seconds unless forced
-    if (now - lastUnreadFetchTime < 10000 && inFlightUnreadPromise) {
-      const data = await inFlightUnreadPromise;
-      if (data) {
-        setUnreadCount(data.unreadCount);
-        setHasBusAlert(data.hasBusAlert);
-        setShowRedDot(data.unreadCount > 0 || data.hasBusAlert);
-      }
-      return;
-    }
-
-    if (!inFlightUnreadPromise) {
-      lastUnreadFetchTime = now;
-      inFlightUnreadPromise = (async () => {
-        try {
-          const clearedTime = typeof window !== "undefined" ? localStorage.getItem("srt_portal_notif_cleared_time") : null;
-          const url = clearedTime
-            ? `/api/notifications/unread-count?clearedTime=${encodeURIComponent(clearedTime)}`
-            : "/api/notifications/unread-count";
-
-          const res = await fetch(url, {
-            cache: "no-store",
-            signal,
-          });
-          if (res.ok) {
-            const data = await res.json();
-            if (data.success) {
-              return {
-                unreadCount: data.unreadCount || 0,
-                hasBusAlert: !!data.hasBusAlert,
-              };
-            }
-          }
-          return null;
-        } catch {
-          return null;
-        } finally {
-          inFlightUnreadPromise = null;
-        }
-      })();
-    }
-
-    const data = await inFlightUnreadPromise;
-    if (data) {
-      setUnreadCount(data.unreadCount);
-      setHasBusAlert(data.hasBusAlert);
-      setShowRedDot(data.unreadCount > 0 || data.hasBusAlert);
-      // Synchronize WhatsApp-style app icon notification badge count
-      setAppBadgeCount(data.unreadCount).catch(() => {});
-    }
-  }, []);
-
-  // Smart polling lifecycle: window focus, tab visibility, and 60s interval
+  // Shared unread notification listener via singleton deduplicator
   useEffect(() => {
-    const abortController = new AbortController();
-    checkNotifications(abortController.signal);
+    const unsubscribe = subscribeToUnreadStats((stats: UnreadStats) => {
+      setUnreadCount(stats.unreadCount);
+      setHasBusAlert(stats.hasBusAlert);
+      setShowRedDot(stats.unreadCount > 0 || stats.hasBusAlert);
+      setAppBadgeCount(stats.unreadCount).catch(() => {});
+    });
+
+    // Initial check (cached/deduplicated)
+    getUnreadNotificationStats().then((stats) => {
+      if (stats) {
+        setUnreadCount(stats.unreadCount);
+        setHasBusAlert(stats.hasBusAlert);
+        setShowRedDot(stats.unreadCount > 0 || stats.hasBusAlert);
+        setAppBadgeCount(stats.unreadCount).catch(() => {});
+      }
+    });
 
     const interval = setInterval(() => {
       if (!document.hidden) {
-        checkNotifications(abortController.signal);
+        getUnreadNotificationStats();
       }
     }, 60000); // 60s shared polling interval
 
-    // Immediate refetch when user switches back to the tab (throttled)
     const handleVisibilityChange = () => {
-      if (!document.hidden && Date.now() - lastUnreadFetchTime >= 15000) {
-        checkNotifications(abortController.signal);
+      if (!document.hidden) {
+        getUnreadNotificationStats();
       }
     };
 
     const handleWindowFocus = () => {
-      if (Date.now() - lastUnreadFetchTime >= 15000) {
-        checkNotifications(abortController.signal);
+      if (!document.hidden) {
+        getUnreadNotificationStats();
       }
     };
 
@@ -271,6 +230,7 @@ export default function Topbar({
       setShowRedDot(false);
       setUnreadCount(0);
       setHasBusAlert(false);
+      resetUnreadStatsLocally();
       clearAppBadgeCount().catch(() => {});
     };
 
@@ -279,16 +239,11 @@ export default function Topbar({
       const customEvent = e as CustomEvent<{ unreadCount?: number; delta?: number }>;
       if (typeof customEvent.detail?.unreadCount === "number") {
         const c = Math.max(0, customEvent.detail.unreadCount);
-        setUnreadCount(c);
-        setShowRedDot(c > 0);
-        if (c === 0) clearAppBadgeCount().catch(() => {});
-        else setAppBadgeCount(c).catch(() => {});
+        updateUnreadStatsLocally(c);
       } else if (typeof customEvent.detail?.delta === "number") {
         setUnreadCount((prev) => {
           const next = Math.max(0, prev + customEvent.detail.delta!);
-          setShowRedDot(next > 0);
-          if (next === 0) clearAppBadgeCount().catch(() => {});
-          else setAppBadgeCount(next).catch(() => {});
+          updateUnreadStatsLocally(next);
           return next;
         });
       }
@@ -299,11 +254,10 @@ export default function Topbar({
       if (e.data && e.data.type === "APP_BADGE_CHANGED") {
         const count = typeof e.data.count === "number" ? e.data.count : 0;
         if (count >= 0) {
-          setUnreadCount(count);
-          setShowRedDot(count > 0);
+          updateUnreadStatsLocally(count);
         } else if (count === -1) {
           // Midnight refresh signal: recheck notifications
-          checkNotifications();
+          getUnreadNotificationStats(true);
         }
       }
     };
@@ -314,8 +268,9 @@ export default function Topbar({
 
     window.addEventListener("notifications-cleared", handleCleared);
     window.addEventListener("notification-count-changed", handleCountChanged);
+
     return () => {
-      abortController.abort();
+      unsubscribe();
       clearInterval(interval);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("focus", handleWindowFocus);
@@ -325,7 +280,7 @@ export default function Topbar({
         navigator.serviceWorker.removeEventListener("message", handleSwMessage);
       }
     };
-  }, [checkNotifications]);
+  }, []);
 
   return (
     <header className={styles.topbar}>

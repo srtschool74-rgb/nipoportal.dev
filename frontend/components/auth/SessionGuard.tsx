@@ -14,6 +14,10 @@ import { AlertCircle, LogOut } from "lucide-react";
 const BROADCAST_CHANNEL_NAME = "srt_portal_session_channel";
 const STORAGE_REVOKE_KEY = "srt_portal_session_revoked";
 
+// Module-level in-flight deduplicator to collapse parallel focus / mount checks across the app
+let inFlightSessionCheck: Promise<void> | null = null;
+let lastGlobalSessionCheckTime = 0;
+
 export default function SessionGuard() {
   const pathname = usePathname();
   const router = useRouter();
@@ -129,38 +133,49 @@ export default function SessionGuard() {
 
   // Periodic and Event-Driven Session Status Polling with Deduplication & Throttling
   const checkStatus = useCallback(async () => {
-    if (isPublicRoute || isRevokedRef.current || isCheckingRef.current) return;
-    if (typeof document !== "undefined" && document.hidden) return; // Zero network/DB load when phone screen is locked or tab is hidden
+    if (isPublicRoute || isRevokedRef.current) return;
+    if (typeof document !== "undefined" && document.hidden) return; // Zero network load when phone screen is locked or tab is hidden
+
     const now = Date.now();
-    if (now - lastCheckTimeRef.current < 10000) return; // At most once per 10s
-
-    isCheckingRef.current = true;
-    lastCheckTimeRef.current = now;
-
-    try {
-      const res = await fetch("/api/auth/session-status", {
-        method: "GET",
-        headers: { "Cache-Control": "no-cache" },
-        cache: "no-store",
-      });
-
-      if (res.status === 401) {
-        const data = await res.json().catch(() => ({}));
-        // Robust safety guard: Only terminate session if server explicitly revoked it
-        if (
-          data?.rawReason &&
-          ["LOGIN_ELSEWHERE", "ADMIN_FORCED", "PASSWORD_CHANGED", "LOGOUT", "IDLE_TIMEOUT"].includes(data.rawReason)
-        ) {
-          const reason = data.reason || "other-device";
-          const message = data.message || REVOCATION_MESSAGES.LOGIN_ELSEWHERE;
-          handleSessionRevocation(reason, message);
-        }
-      }
-    } catch (err) {
-      // Network hiccup: don't immediately revoke on temporary offline
-    } finally {
-      isCheckingRef.current = false;
+    // Throttle to at most once per 15s across all components and events
+    if (now - lastGlobalSessionCheckTime < 15000 && inFlightSessionCheck) {
+      return inFlightSessionCheck;
     }
+    if (now - lastGlobalSessionCheckTime < 15000) {
+      return;
+    }
+
+    if (!inFlightSessionCheck) {
+      lastGlobalSessionCheckTime = now;
+      inFlightSessionCheck = (async () => {
+        try {
+          const res = await fetch("/api/auth/session-status", {
+            method: "GET",
+            headers: { "Cache-Control": "no-cache" },
+            cache: "no-store",
+          });
+
+          if (res.status === 401) {
+            const data = await res.json().catch(() => ({}));
+            // Robust safety guard: Only terminate session if server explicitly revoked it
+            if (
+              data?.rawReason &&
+              ["LOGIN_ELSEWHERE", "ADMIN_FORCED", "PASSWORD_CHANGED", "LOGOUT", "IDLE_TIMEOUT"].includes(data.rawReason)
+            ) {
+              const reason = data.reason || "other-device";
+              const message = data.message || REVOCATION_MESSAGES.LOGIN_ELSEWHERE;
+              handleSessionRevocation(reason, message);
+            }
+          }
+        } catch (err) {
+          // Network hiccup: don't immediately revoke on temporary offline
+        } finally {
+          inFlightSessionCheck = null;
+        }
+      })();
+    }
+
+    return inFlightSessionCheck;
   }, [isPublicRoute, handleSessionRevocation]);
 
   // Activity Ping (Throttled to ACTIVITY_UPDATE_INTERVAL_MIN minutes)

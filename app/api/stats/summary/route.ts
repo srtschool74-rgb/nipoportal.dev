@@ -12,10 +12,17 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const summary = await getAdminDashboardSummary({
+    // Protect against serverless 5s freeze by enforcing a 4.5s timeout race
+    const summaryPromise = getAdminDashboardSummary({
       role: session.user.role,
       userId: session.user.id,
     });
+
+    const timeoutPromise = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error("Database summary query timed out after 4500ms")), 4500)
+    );
+
+    const summary = await Promise.race([summaryPromise, timeoutPromise]);
 
     return NextResponse.json(
       { success: true, summary, updatedAt: new Date().toISOString() },
@@ -25,8 +32,16 @@ export async function GET() {
         },
       }
     );
-  } catch (err) {
-    console.error("GET /api/stats/summary error:", err);
-    return NextResponse.json({ error: "Failed to load stats summary" }, { status: 500 });
+  } catch (err: unknown) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    console.error("[API /api/stats/summary] Error:", errMsg);
+    return NextResponse.json(
+      {
+        success: false,
+        error: "Failed to load stats summary",
+        message: errMsg,
+      },
+      { status: errMsg.includes("timed out") ? 504 : 500 }
+    );
   }
 }

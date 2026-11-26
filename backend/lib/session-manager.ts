@@ -124,16 +124,23 @@ export async function validateSession(sessionId: string): Promise<ValidateSessio
   }
 
   try {
+    // Fast indexed query: fetch only essential status columns
     const session = await prisma.userSession.findUnique({
       where: { sessionId },
-      include: {
+      select: {
+        id: true,
+        userId: true,
+        sessionId: true,
+        revokedAt: true,
+        revokedReason: true,
+        lastActiveAt: true,
+        expiresAt: true,
+        createdAt: true,
         user: {
           select: {
             id: true,
             role: true,
             status: true,
-            name: true,
-            email: true,
             sessionVersion: true,
           },
         },

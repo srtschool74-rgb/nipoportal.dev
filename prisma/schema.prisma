@@ -77,6 +77,7 @@ model UserSession {
   @@index([userId])
   @@index([userId, revokedAt])
   @@index([sessionId])
+  @@index([sessionId, revokedAt])
   @@index([expiresAt])
 }
 
@@ -1196,6 +1197,8 @@ model Notification {
   @@index([userId, createdAt])
   @@index([userId, readAt])
   @@index([userId, isRead, createdAt])
+  @@index([userId, isRead, readAt])
+  @@index([userId, shownAt, isRead, createdAt(sort: Desc)])
   @@index([userId, isRead, type])
   @@index([userId, category])
   @@index([userId, isRead, category])
@@ -1230,6 +1233,7 @@ model PushSubscription {
   @@index([deviceFingerprint])
   @@index([lastLoginAt])
   @@index([userId, lastLoginAt])
+  @@index([userId, isActive])
   @@index([userId, isActive, lastLoginAt])
 }
 

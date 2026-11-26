@@ -445,15 +445,22 @@ export async function getSubjectStats(
 export async function getAdminDashboardSummary(
   scope: StatsScope = { role: "ADMIN" }
 ): Promise<AdminDashboardSummary> {
-  const [students, teachers, parents, classes, subjects] = await Promise.all([
-    getTotalStudents(scope),
-    getTeacherStats(scope),
-    getParentStats(scope),
-    getClassCounts(scope),
-    getSubjectStats(scope),
-  ]);
+  const cacheKey = `admin-dashboard-summary:${scope.role || "ADMIN"}:${scope.userId || "all"}`;
+  return withShortStatsCache(
+    cacheKey,
+    async () => {
+      const [students, teachers, parents, classes, subjects] = await Promise.all([
+        getTotalStudents(scope),
+        getTeacherStats(scope),
+        getParentStats(scope),
+        getClassCounts(scope),
+        getSubjectStats(scope),
+      ]);
 
-  return { students, teachers, parents, classes, subjects };
+      return { students, teachers, parents, classes, subjects };
+    },
+    20_000 // 20s short-lived stats cache prevents connection pool exhaustion and 5s query timeouts
+  );
 }
 
 /**

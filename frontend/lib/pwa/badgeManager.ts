@@ -8,6 +8,7 @@
  */
 
 import { Capacitor } from "@capacitor/core";
+import { getUnreadNotificationStats } from "@/frontend/lib/notifications/unreadCountPoller";
 
 async function getNativeBadgePlugin(): Promise<any | null> {
   if (typeof window === "undefined" || !Capacitor.isNativePlatform()) {
@@ -104,18 +105,14 @@ export async function clearAppBadgeCount(): Promise<void> {
 }
 
 /**
- * Fetches latest unread count from the server and updates app icon badge
+ * Fetches latest unread count from the server and updates app icon badge (deduplicated)
  */
 export async function syncAppBadgeWithServer(): Promise<number> {
   if (typeof window === "undefined") return 0;
   try {
-    const res = await fetch("/api/notifications/unread-count", {
-      headers: { "Cache-Control": "no-cache" },
-    });
-    if (res.ok) {
-      const data = await res.json();
-      const rawCount = typeof data.unreadCount === "number" ? data.unreadCount : typeof data.count === "number" ? data.count : 0;
-      const count = Math.max(0, rawCount);
+    const stats = await getUnreadNotificationStats();
+    if (stats && typeof stats.unreadCount === "number") {
+      const count = Math.max(0, stats.unreadCount);
       await setAppBadgeCount(count);
       return count;
     }

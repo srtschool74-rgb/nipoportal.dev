@@ -28,7 +28,9 @@ export async function GET(req: NextRequest) {
     }
 
     const userId = token.id as string;
-    const clearedTimeParam = req.nextUrl.searchParams.get("clearedTime");
+    // Prefer header 'x-cleared-time' so URL remains clean and static for deduplication
+    const clearedTimeParam =
+      req.headers.get("x-cleared-time") || req.nextUrl.searchParams.get("clearedTime");
     const parsedCleared = clearedTimeParam ? new Date(clearedTimeParam) : null;
     const clearedAfter = parsedCleared && !isNaN(parsedCleared.getTime()) ? parsedCleared : null;
 
