@@ -3,7 +3,7 @@
 import styles from "./Topbar.module.css";
 import { usePathname, useRouter } from "next/navigation";
 import ThemeToggle from "./ThemeToggle";
-import { Bell, Send, CheckCircle2 } from "lucide-react";
+import { Bell, Send, CheckCircle2, AlertCircle, AlertTriangle } from "lucide-react";
 import { useEffect, useState, useCallback, useRef } from "react";
 import { setAppBadgeCount, clearAppBadgeCount } from "@/frontend/lib/pwa/badgeManager";
 import RoleSwitcher from "@/frontend/components/auth/RoleSwitcher";
@@ -43,7 +43,15 @@ export default function Topbar({
   const [isTestingPush, setIsTestingPush] = useState<boolean>(false);
   const isTestingPushRef = useRef<boolean>(false);
   const [testPushSuccess, setTestPushSuccess] = useState<boolean>(false);
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [toast, setToast] = useState<{
+    message: string;
+    type: "success" | "warning" | "error";
+  } | null>(null);
+
+  const showToast = (message: string, type: "success" | "warning" | "error", durationMs = 4000) => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), durationMs);
+  };
 
   const handleTestLockScreenNotification = async () => {
     if (isTestingPushRef.current) return;
@@ -56,8 +64,7 @@ export default function Topbar({
           if (typeof Notification !== "undefined" && Notification.permission !== "granted") {
             const perm = await Notification.requestPermission();
             if (perm !== "granted") {
-              setToastMessage("⚠️ Please allow notifications to receive alerts on this device.");
-              setTimeout(() => setToastMessage(null), 3500);
+              showToast("Please allow browser notifications to receive alerts on this device.", "warning", 4000);
               return;
             }
           }
@@ -139,17 +146,21 @@ export default function Topbar({
       });
       const data = await res.json().catch(() => ({}));
 
-      if (res.ok && data.success) {
+      if (res.ok && data.success && (data.delivered ?? 0) >= 1) {
         setTestPushSuccess(true);
-        setToastMessage("🔔 Test notification sent to your device!");
+        showToast(`Test notification sent (${data.delivered} device${data.delivered > 1 ? "s" : ""}).`, "success", 3500);
         setTimeout(() => setTestPushSuccess(false), 2500);
+      } else if (data?.code === "NO_ACTIVE_SUBSCRIPTION") {
+        showToast(
+          data.error || "No active device registered for this account. Enable notifications on this device.",
+          "warning",
+          5000
+        );
       } else {
-        setToastMessage(data?.error || "⚠️ Could not send test notification.");
+        showToast(data?.error || "Could not send test notification.", "error", 4500);
       }
-      setTimeout(() => setToastMessage(null), 3500);
     } catch {
-      setToastMessage("⚠️ Network error while sending test notification.");
-      setTimeout(() => setToastMessage(null), 3000);
+      showToast("Network error while sending test notification.", "error", 4000);
     } finally {
       isTestingPushRef.current = false;
       setIsTestingPush(false);
@@ -366,8 +377,9 @@ export default function Topbar({
       </div>
 
       {/* Floating non-intrusive toast - Zero browser alert popups */}
-      {toastMessage && (
+      {toast && (
         <div
+          role="status"
           style={{
             position: "fixed",
             bottom: "24px",
@@ -377,18 +389,26 @@ export default function Topbar({
             color: "#f8fafc",
             padding: "0.85rem 1.25rem",
             borderRadius: "14px",
-            border: "1px solid #10b981",
-            boxShadow: "0 10px 30px rgba(0,0,0,0.5), 0 0 15px rgba(16, 185, 129, 0.25)",
+            border:
+              toast.type === "success"
+                ? "1px solid #10b981"
+                : toast.type === "warning"
+                ? "1px solid #f59e0b"
+                : "1px solid #ef4444",
+            boxShadow: "0 10px 30px rgba(0,0,0,0.5)",
             display: "flex",
             alignItems: "center",
             gap: "0.65rem",
             fontSize: "0.88rem",
             fontWeight: 600,
+            maxWidth: "min(420px, calc(100vw - 32px))",
             pointerEvents: "none",
           }}
         >
-          <CheckCircle2 size={18} color="#10b981" />
-          <span>{toastMessage}</span>
+          {toast.type === "success" && <CheckCircle2 size={18} color="#10b981" style={{ flexShrink: 0 }} />}
+          {toast.type === "warning" && <AlertTriangle size={18} color="#f59e0b" style={{ flexShrink: 0 }} />}
+          {toast.type === "error" && <AlertCircle size={18} color="#ef4444" style={{ flexShrink: 0 }} />}
+          <span>{toast.message}</span>
         </div>
       )}
     </header>

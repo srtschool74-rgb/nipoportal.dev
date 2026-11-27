@@ -454,89 +454,88 @@ export async function dispatchNotification(
     console.error("[Dispatcher] Error querying push subscriptions:", subErr);
   }
 
-  // 5. Concurrent Multi-Channel Delivery (Promise.allSettled)
+  // 5. Single-Channel Delivery per Recipient:
+  //    Try OneSignal in batches of 2000 first; only fall back to Direct WebPush
+  //    for users whose OneSignal batch did not deliver (never send both channels to the same user).
   let oneSignalCount = 0;
   let webPushCount = 0;
   let failedCount = 0;
 
   const BATCH_SIZE = 2000; // OneSignal max batch size
+  const oneSignalDeliveredUsers = new Set<string>();
 
-  const dispatchTasks: Promise<any>[] = [];
-
-  // --------------------------------------------------------------------------
-  // BRANCH A: OneSignal REST API (targeted by external_id = userId)
-  // --------------------------------------------------------------------------
   for (let i = 0; i < targetUserIds.length; i += BATCH_SIZE) {
     const chunk = targetUserIds.slice(i, i + BATCH_SIZE);
+    try {
+      const osResult = await sendOneSignalPush({
+        userId: chunk,
+        title,
+        body,
+        url,
+        unreadCount: 1,
+        category: normalizedType,
+        tag: deterministicTag,
+        additionalData: {
+          eventType: normalizedType,
+          entityId,
+          tag: deterministicTag,
+          ...data,
+        },
+      });
 
-    dispatchTasks.push(
-      (async () => {
-        try {
-          const osResult = await sendOneSignalPush({
-            userId: chunk,
-            title,
-            body,
-            url,
-            unreadCount: 1,
-            category: normalizedType,
-            additionalData: {
-              eventType: normalizedType,
-              entityId,
-              tag: deterministicTag,
-              ...data,
-            },
-          });
+      const recCount = osResult.recipients || 0;
+      if (osResult.success && recCount > 0) {
+        oneSignalCount += recCount;
+        chunk.forEach((uid) => oneSignalDeliveredUsers.add(uid));
+      }
 
-          const recCount = osResult.recipients || 0;
-          if (osResult.success && recCount > 0) {
-            oneSignalCount += recCount;
-          }
-
-          // Record trace for each recipient in the batch
-          await prisma.notificationDelivery.createMany({
-            data: chunk.map((uid) => ({
-              eventType: normalizedType,
-              entityId: entityId || null,
-              recipientUserId: uid,
-              channel: "ONESIGNAL",
-              status: osResult.success && recCount > 0 ? "DELIVERED" : (recCount === 0 ? "RECIPIENTS_ZERO" : "FAILED"),
-              onesignalNotificationId: osResult.notificationId || null,
-              httpStatus: osResult.success ? 200 : (osResult.details?.status || 500),
-              recipientsCount: recCount,
-              errorCode: osResult.error ? "ONESIGNAL_ERROR" : null,
-              errorMessage: sanitizeError(osResult.error),
-              attempts: 1,
-              tag: deterministicTag,
-              sentAt: osResult.success && recCount > 0 ? new Date() : null,
-            })),
-          }).catch(() => {});
-        } catch (osErr: any) {
-          failedCount += chunk.length;
-          console.warn("[Dispatcher] OneSignal batch delivery note:", osErr);
-          await prisma.notificationDelivery.createMany({
-            data: chunk.map((uid) => ({
-              eventType: normalizedType,
-              entityId: entityId || null,
-              recipientUserId: uid,
-              channel: "ONESIGNAL",
-              status: "FAILED",
-              httpStatus: 500,
-              recipientsCount: 0,
-              errorCode: "EXCEPTION",
-              errorMessage: sanitizeError(osErr?.message || "OneSignal dispatch error"),
-              attempts: 1,
-              tag: deterministicTag,
-            })),
-          }).catch(() => {});
-        }
-      })()
-    );
+      await prisma.notificationDelivery.createMany({
+        data: chunk.map((uid) => ({
+          eventType: normalizedType,
+          entityId: entityId || null,
+          recipientUserId: uid,
+          channel: "ONESIGNAL",
+          status: osResult.success && recCount > 0 ? "DELIVERED" : (recCount === 0 ? "RECIPIENTS_ZERO" : "FAILED"),
+          onesignalNotificationId: osResult.notificationId || null,
+          httpStatus: osResult.success ? 200 : (osResult.details?.status || 500),
+          recipientsCount: recCount,
+          errorCode: osResult.error ? "ONESIGNAL_ERROR" : null,
+          errorMessage: sanitizeError(osResult.error),
+          attempts: 1,
+          tag: deterministicTag,
+          sentAt: osResult.success && recCount > 0 ? new Date() : null,
+        })),
+      }).catch(() => {});
+    } catch (osErr: any) {
+      failedCount += chunk.length;
+      console.warn("[Dispatcher] OneSignal batch delivery note:", osErr);
+      await prisma.notificationDelivery.createMany({
+        data: chunk.map((uid) => ({
+          eventType: normalizedType,
+          entityId: entityId || null,
+          recipientUserId: uid,
+          channel: "ONESIGNAL",
+          status: "FAILED",
+          httpStatus: 500,
+          recipientsCount: 0,
+          errorCode: "EXCEPTION",
+          errorMessage: sanitizeError(osErr?.message || "OneSignal dispatch error"),
+          attempts: 1,
+          tag: deterministicTag,
+        })),
+      }).catch(() => {});
+    }
   }
 
   // --------------------------------------------------------------------------
-  // BRANCH B: Direct WebPush (VAPID) to all registered device subscriptions
+  // BRANCH B: Direct WebPush (VAPID) fallback ONLY for users not delivered via OneSignal
   // --------------------------------------------------------------------------
-  if (pushSubs.length > 0 && vapidReady) {
+  const fallbackSubs = pushSubs.filter(
+    (sub) => !sub.userId || !oneSignalDeliveredUsers.has(sub.userId)
+  );
+  const dispatchTasks: Promise<any>[] = [];
+
+  if (fallbackSubs.length > 0 && vapidReady) {
     const webPayload = JSON.stringify({
       title,
       body,
@@ -572,7 +571,7 @@ export async function dispatchNotification(
     dispatchTasks.push(
       (async () => {
         const results = await Promise.allSettled(
-          pushSubs.map(async (sub) => {
+          fallbackSubs.map(async (sub) => {
             try {
               const res = await webpush.sendNotification(
                 {
@@ -588,13 +587,14 @@ export async function dispatchNotification(
               return { success: true, sub, statusCode: res.statusCode || 201 };
             } catch (pushErr: any) {
               const statusCode = pushErr?.statusCode || 500;
-              // Clean up dead subscriptions on HTTP 404 / 410 Gone
+              // Soft-deactivate dead subscriptions on HTTP 404 / 410 Gone
               if (statusCode === 404 || statusCode === 410) {
-                await Promise.allSettled([
-                  prisma.pushSubscription.deleteMany({ where: { endpoint: sub.endpoint } }),
-                  prisma.pwaSubscription.deleteMany({ where: { endpoint: sub.endpoint } }),
-                  prisma.deviceNotificationsRegistry.deleteMany({ where: { endpoint: sub.endpoint } }),
-                ]);
+                await prisma.pushSubscription
+                  .updateMany({
+                    where: { endpoint: sub.endpoint },
+                    data: { isActive: false },
+                  })
+                  .catch(() => {});
               }
               return {
                 success: false,

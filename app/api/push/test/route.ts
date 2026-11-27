@@ -227,39 +227,102 @@ export async function POST(req: Request) {
             });
 
             if (statusCode === 404 || statusCode === 410) {
-              await Promise.allSettled([
-                prisma.pushSubscription.deleteMany({ where: { endpoint: target.endpoint } }),
-                prisma.pwaSubscription.deleteMany({ where: { endpoint: target.endpoint } }),
-                prisma.deviceNotificationsRegistry.deleteMany({ where: { endpoint: target.endpoint } }),
-              ]);
+              await prisma.pushSubscription
+                .updateMany({
+                  where: { endpoint: target.endpoint },
+                  data: { isActive: false },
+                })
+                .catch(() => {});
             }
           }
         })
       );
     }
 
-    const overallSuccess = oneSignalResult.success || webPushDelivered > 0;
+    const deliveredCount = oneSignalDelivered
+      ? oneSignalResult.recipients || 0
+      : webPushDelivered;
+    const providerUsed = oneSignalDelivered
+      ? "ONESIGNAL"
+      : uniqueTargets.length > 0
+      ? "WEBPUSH"
+      : "NONE";
+    const overallSuccess = deliveredCount >= 1;
 
-    return NextResponse.json({
-      success: overallSuccess,
+    let code: string | undefined;
+    let errorMessage: string | undefined;
+    let httpStatus = 200;
+
+    if (!overallSuccess) {
+      if (uniqueTargets.length === 0 && (!oneSignalResult.error || oneSignalResult.error.includes("RECIPIENTS_ZERO"))) {
+        code = "NO_ACTIVE_SUBSCRIPTION";
+        errorMessage = "No active device registered for this account. Enable notifications on this device.";
+        httpStatus = 200;
+      } else {
+        code = "PROVIDER_ERROR";
+        errorMessage =
+          oneSignalResult.error ||
+          deviceResults.find((r) => r.status === "FAILED")?.error ||
+          "Push provider failed to deliver to any active device.";
+        httpStatus = 502;
+      }
+    }
+
+    console.log("[/api/push/test]", {
       userId,
-      userName,
-      unreadCount,
-      oneSignal: {
-        appId: ONESIGNAL_APP_ID,
-        externalId: userId,
-        result: oneSignalResult,
-      },
-      webPush: {
-        subscriptionsFound: uniqueTargets.length,
-        delivered: webPushDelivered,
-        failed: webPushFailed,
-        deviceResults,
-      },
-      message: overallSuccess
-        ? "Push notification dispatched successfully."
-        : "Push dispatch complete.",
+      provider: providerUsed,
+      recipients: oneSignalDelivered ? oneSignalResult.recipients : uniqueTargets.length,
+      delivered: deliveredCount,
+      failed: webPushFailed,
+      code: code || "OK",
     });
+
+    await prisma.notificationDelivery
+      .create({
+        data: {
+          eventType: "TEST_PUSH",
+          recipientUserId: userId,
+          channel: providerUsed,
+          status: overallSuccess ? "DELIVERED" : code || "FAILED",
+          onesignalNotificationId: oneSignalResult.notificationId || null,
+          httpStatus,
+          recipientsCount: deliveredCount,
+          errorCode: code || null,
+          errorMessage: errorMessage || null,
+          tag: stableTag,
+          sentAt: overallSuccess ? new Date() : null,
+        },
+      })
+      .catch(() => {});
+
+    return NextResponse.json(
+      {
+        success: overallSuccess,
+        delivered: deliveredCount,
+        recipients: oneSignalDelivered ? oneSignalResult.recipients || 0 : uniqueTargets.length,
+        provider: providerUsed,
+        ...(code ? { code } : {}),
+        ...(errorMessage ? { error: errorMessage } : {}),
+        userId,
+        userName,
+        unreadCount,
+        oneSignal: {
+          appId: ONESIGNAL_APP_ID,
+          externalId: userId,
+          result: oneSignalResult,
+        },
+        webPush: {
+          subscriptionsFound: uniqueTargets.length,
+          delivered: webPushDelivered,
+          failed: webPushFailed,
+          deviceResults,
+        },
+        message: overallSuccess
+          ? "Push notification dispatched successfully."
+          : errorMessage || "Could not send test notification.",
+      },
+      { status: httpStatus }
+    );
   } catch (error: unknown) {
     const errMessage = error instanceof Error ? error.message : "Internal server error";
     console.error("[Push Test API] Error:", error);
