@@ -23,8 +23,8 @@ export default function HomeClient({
   authenticatedRole = null,
 }: HomeClientProps) {
   const router = useRouter();
-  // Home Page Animation: false by default to prevent blocking splash lag
-  const [showSplash, setShowSplash] = useState(false);
+  // Show Home splash screen first on '/', then navigate to '/login' (or dashboard if logged in)
+  const [showSplash, setShowSplash] = useState(true);
   const [targetDashboard, setTargetDashboard] = useState<string | null>(null);
 
   // On native mobile app, immediately hide the native container splash so the rich 3D web animation is visible
@@ -106,6 +106,8 @@ export default function HomeClient({
     }
     if (targetDashboard) {
       router.replace(targetDashboard);
+    } else {
+      router.replace("/login");
     }
   };
 

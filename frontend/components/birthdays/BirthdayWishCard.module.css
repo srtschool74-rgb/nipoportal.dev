@@ -8,7 +8,8 @@
 .cardContainer {
   position: relative;
   width: 100%;
-  max-width: 760px;
+  max-width: min(760px, 100%);
+  min-width: 0;
   margin: 0 auto;
   box-sizing: border-box;
   background-color: #fbf5e8;
@@ -216,8 +217,8 @@
 }
 
 .logoBadgeCircle {
-  width: clamp(80px, 12vw, 96px);
-  height: clamp(80px, 12vw, 96px);
+  width: clamp(92px, 13vw, 104px);
+  height: clamp(92px, 13vw, 104px);
   border-radius: 50%;
   background: #ffffff;
   border: 3px solid #3d2314;
@@ -227,21 +228,23 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 0.4rem;
+  gap: 2px;
+  padding: 0.45rem;
   box-sizing: border-box;
+  overflow: hidden;
   text-align: center;
 }
 
 .logoImage {
-  width: 40px;
-  height: 40px;
+  width: 30px;
+  height: 30px;
   object-fit: contain;
-  margin-bottom: 0.15rem;
+  flex-shrink: 0;
 }
 
 .logoFallbackBadge {
-  width: 34px;
-  height: 34px;
+  width: 30px;
+  height: 30px;
   border-radius: 50%;
   background-color: #3d2314;
   color: #fbf5e8;
@@ -249,40 +252,40 @@
   align-items: center;
   justify-content: center;
   font-weight: 800;
-  font-size: 0.8rem;
-  margin-bottom: 0.2rem;
+  font-size: 0.72rem;
   flex-shrink: 0;
 }
 
 @media (max-width: 359px) {
   .logoFallbackBadge {
-    width: 26px;
-    height: 26px;
-    font-size: 0.65rem;
+    width: 24px;
+    height: 24px;
+    font-size: 0.62rem;
   }
 }
 
 .badgeSchoolName {
-  font-size: 0.625rem;
+  font-size: 0.56rem;
   font-weight: 800;
   color: #2b1509;
   text-transform: uppercase;
   letter-spacing: 0.02em;
-  line-height: 1.1;
-  max-width: 78px;
+  line-height: 1.08;
+  max-width: 82px;
   text-align: center;
+  word-break: normal;
 }
 
 .badgeTagline {
-  font-size: 0.525rem;
+  font-size: 0.46rem;
   font-weight: 700;
   color: #b45309;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.03em;
   line-height: 1.05;
-  margin-top: 0.1rem;
-  max-width: 78px;
+  max-width: 82px;
   text-align: center;
+  word-break: normal;
 }
 
 /* ==========================================================================
@@ -385,15 +388,15 @@
   }
 
   .logoBadgeCircle {
-    width: clamp(74px, 18vw, 86px);
-    height: clamp(74px, 18vw, 86px);
-    padding: 0.35rem;
+    width: 92px;
+    height: 92px;
+    padding: 0.4rem;
     border-width: 2.5px;
   }
 
   .logoImage {
-    width: 34px;
-    height: 34px;
+    width: 26px;
+    height: 26px;
   }
 }
 

@@ -84,14 +84,15 @@ export default function NotificationPopupModal({
       return [];
     }
 
-    // Sort to prioritize BIRTHDAY wishes and URGENT alerts at the front
-    // Once seen in pop-up, it is NOT shown in pop-up again, but remains safely in notification history page!
-    // Auto popup only applies to urgent announcements or birthday cards so normal usage is never interrupted
+    // Sort to prioritize BIRTHDAY wishes and URGENT alerts at the front,
+    // while ensuring NO unread unseen notification is missed on dashboard open.
     const unreadItems = items
-      .filter(n => !n.isRead && new Date(n.timestamp).getTime() > clearedTime && !seenIdRef.current.has(n.id) && (n.category === "BIRTHDAY" || n.priority === "URGENT"))
+      .filter(n => !n.isRead && new Date(n.timestamp).getTime() > clearedTime && !seenIdRef.current.has(n.id))
       .sort((a, b) => {
         if (a.category === "BIRTHDAY" && b.category !== "BIRTHDAY") return -1;
         if (b.category === "BIRTHDAY" && a.category !== "BIRTHDAY") return 1;
+        if (a.priority === "URGENT" && b.priority !== "URGENT") return -1;
+        if (b.priority === "URGENT" && a.priority !== "URGENT") return 1;
         return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
       });
 
@@ -104,9 +105,8 @@ export default function NotificationPopupModal({
       return true;
     });
 
-    // Requirement: Any new notification shows ONLY ONCE on the pop-up notification on first time.
-    // Never bombard the user with 9+ historical items at once; present only the latest single new alert!
-    return unique.slice(0, 1);
+    // Show up to 5 latest unseen notifications in the popup carousel so none are missed
+    return unique.slice(0, 5);
   };
 
   // Helper to mark a list of notifications as dismissed/read when user actually closes or interacts
@@ -184,17 +184,14 @@ export default function NotificationPopupModal({
         .catch(() => {});
     };
 
+    let initTimer: ReturnType<typeof setTimeout> | null = null;
     // Initial immediate check if initialNotifications was empty
     if (!initialNotifications || initialNotifications.length === 0) {
-      const initTimer = setTimeout(checkFreshNotifications, 100);
-      return () => {
-        isMounted = false;
-        clearTimeout(initTimer);
-      };
+      initTimer = setTimeout(checkFreshNotifications, 100);
     }
 
-    // Fast 5000ms background poll when tab is active for urgent school intimations
-    const POLL_INTERVAL_MS = 5000;
+    // Fast 10000ms background poll when tab is active for urgent school intimations
+    const POLL_INTERVAL_MS = 10000;
     const interval = setInterval(() => {
       if (!document.hidden) {
         checkFreshNotifications();
@@ -210,6 +207,7 @@ export default function NotificationPopupModal({
 
     return () => {
       isMounted = false;
+      if (initTimer) clearTimeout(initTimer);
       clearInterval(interval);
       document.removeEventListener("visibilitychange", handleVisibility);
     };
