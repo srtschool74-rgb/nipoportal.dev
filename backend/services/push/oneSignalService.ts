@@ -91,7 +91,16 @@ export async function sendOneSignalPush(
   }
 
   const safeBadgeCount = Math.max(0, Number(unreadCount) || 1);
-  const resolvedUrl = url || "https://main.d3bt7u4517jg0f.amplifyapp.com";
+  const portalOrigin = (
+    process.env.NEXT_PUBLIC_APP_URL ||
+    process.env.NEXTAUTH_URL ||
+    "https://nipoportal.vercel.app"
+  ).replace(/\/$/, "");
+  const rawUrl = url || "/";
+  const resolvedUrl =
+    rawUrl.startsWith("http://") || rawUrl.startsWith("https://")
+      ? rawUrl
+      : `${portalOrigin}${rawUrl.startsWith("/") ? rawUrl : `/${rawUrl}`}`;
 
   // Chunk large audiences into batches of at most 2,000 (OneSignal API limit)
   const CHUNK_SIZE = 2000;
@@ -114,6 +123,9 @@ export async function sendOneSignalPush(
       headings: { en: title },
       contents: { en: body },
       url: resolvedUrl,
+      priority: 10,
+      android_visibility: 1,
+      ios_interruption_level: "active",
       ios_badgeType: "SetTo",
       ios_badgeCount: safeBadgeCount,
       data: {

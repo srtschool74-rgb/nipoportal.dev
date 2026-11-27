@@ -1,6 +1,6 @@
 export const dynamic = "force-dynamic";
 
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
 import { prisma } from "@/backend/db/prisma";
@@ -264,9 +264,10 @@ export async function POST(request: Request) {
       }
     })();
 
-    if (typeof (globalThis as any).waitUntil === "function") {
-      (globalThis as any).waitUntil(notifPromise);
-    }
+    // Schedule with Next.js after() so Vercel serverless keeps the function alive until push completes
+    after(async () => {
+      await notifPromise;
+    });
 
     // 5. Instantly return 200 OK (<100ms) with message and clientTempId
     return NextResponse.json({

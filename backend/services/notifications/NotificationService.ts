@@ -285,108 +285,147 @@ export class NotificationService {
         };
       }
 
-      // Fetch active web push subscriptions for allowed users
-      const subscriptions = await prisma.pushSubscription.findMany({
-        where: {
-          userId: { in: pushAllowedUserIds },
-          isActive: true,
-        },
-        select: {
-          id: true,
-          userId: true,
-          endpoint: true,
-          p256dh: true,
-          auth: true,
-        },
-      });
-
-      // Deduplicate by endpoint
-      const endpointMap = new Map<string, typeof subscriptions[0]>();
-      for (const sub of subscriptions) {
-        if (sub.endpoint && sub.p256dh && sub.auth && !endpointMap.has(sub.endpoint)) {
-          endpointMap.set(sub.endpoint, sub);
-        }
-      }
-
-      const activeSubs = Array.from(endpointMap.values());
-
-      // Prepare WebPush Payload
-      const pushPayload = JSON.stringify({
-        title,
-        body,
-        image: image || undefined,
-        url: link,
-        unreadCount: 1,
-        badgeCount: 1,
-        icon,
-        badge,
-        tag: stableTag,
-        data: {
+      // 1. Primary Channel: OneSignal external_id targeting
+      let oneSignalDeliveredCount = 0;
+      try {
+        const osRes = await sendOneSignalPush({
+          userId: pushAllowedUserIds,
+          title,
+          body,
+          image,
           url: link,
-          notificationId: firstNotificationId,
-          type: normalizedType,
+          unreadCount: 1,
           category: normalizedCategory,
           tag: stableTag,
-          image: image || undefined,
-          ...data,
-        },
-      });
+          additionalData: {
+            notificationId: firstNotificationId,
+            type: normalizedType,
+            tag: stableTag,
+            image,
+            ...data,
+          },
+        });
+        oneSignalDeliveredCount = osRes.recipients ?? 0;
+        if (osRes.success && oneSignalDeliveredCount > 0) {
+          pushSent += oneSignalDeliveredCount;
+        }
+        await prisma.notificationDelivery.createMany({
+          data: pushAllowedUserIds.map((uid) => ({
+            eventType: normalizedType,
+            entityId: firstNotificationId || null,
+            recipientUserId: uid,
+            channel: "ONESIGNAL",
+            status:
+              osRes.success && oneSignalDeliveredCount > 0
+                ? "DELIVERED"
+                : oneSignalDeliveredCount === 0
+                  ? "RECIPIENTS_ZERO"
+                  : "FAILED",
+            onesignalNotificationId: osRes.notificationId || null,
+            httpStatus: osRes.success ? 200 : 502,
+            recipientsCount: oneSignalDeliveredCount,
+            errorCode: osRes.error ? "ONESIGNAL_ERROR" : null,
+            errorMessage: osRes.error ? String(osRes.error).slice(0, 400) : null,
+            attempts: 1,
+            tag: stableTag,
+            sentAt: osRes.success && oneSignalDeliveredCount > 0 ? new Date() : null,
+          })),
+        }).catch(() => {});
+      } catch (osErr) {
+        console.warn("[NotificationService] OneSignal dispatch note:", osErr);
+      }
 
-      const pushPromises = activeSubs.map(async (sub) => {
-        if (!vapidConfigured) return;
-        try {
-          await webpush.sendNotification(
-            {
+      // 2. Direct WebPush fallback when OneSignal did not cover all allowed recipients
+      if (vapidConfigured && oneSignalDeliveredCount < pushAllowedUserIds.length) {
+        const [subscriptions, pwaSubs, registrySubs] = await Promise.all([
+          prisma.pushSubscription.findMany({
+            where: { userId: { in: pushAllowedUserIds }, isActive: true },
+            select: { id: true, userId: true, endpoint: true, p256dh: true, auth: true },
+          }),
+          prisma.pwaSubscription.findMany({
+            where: { userId: { in: pushAllowedUserIds } },
+            select: { id: true, userId: true, endpoint: true, p256dhKey: true, authKey: true },
+          }).catch(() => []),
+          prisma.deviceNotificationsRegistry.findMany({
+            where: { userId: { in: pushAllowedUserIds } },
+            select: { id: true, userId: true, endpoint: true, p256dh: true, auth: true },
+          }).catch(() => []),
+        ]);
+
+        const endpointMap = new Map<string, { id: string; userId: string | null; endpoint: string; p256dh: string; auth: string }>();
+        for (const sub of subscriptions) {
+          if (sub.endpoint && sub.p256dh && sub.auth && !endpointMap.has(sub.endpoint)) {
+            endpointMap.set(sub.endpoint, {
+              id: sub.id,
+              userId: sub.userId,
               endpoint: sub.endpoint,
-              keys: {
-                p256dh: sub.p256dh!,
-                auth: sub.auth!,
-              },
-            },
-            pushPayload,
-            {
-              TTL: 86400,
-              urgency: priority === "URGENT" ? "high" : "normal",
-            }
-          );
-          pushSent++;
-        } catch (pushErr: any) {
-          pushFailed++;
-          const statusCode = pushErr?.statusCode || pushErr?.status;
-          // If subscription has expired / unregistered (404 or 410), prune it
-          if (statusCode === 404 || statusCode === 410) {
-            await prisma.pushSubscription.deleteMany({
-              where: { endpoint: sub.endpoint },
-            }).catch(() => {});
+              p256dh: sub.p256dh,
+              auth: sub.auth,
+            });
           }
         }
-      });
-
-      // Also dispatch via OneSignal for external_id targeting
-      const oneSignalPromise = sendOneSignalPush({
-        userId: eligibleUserIds,
-        title,
-        body,
-        image,
-        url: link,
-        unreadCount: 1,
-        category: normalizedCategory,
-        additionalData: {
-          notificationId: firstNotificationId,
-          type: normalizedType,
-          tag: stableTag,
-          image,
-          ...data,
-        },
-      }).then((res) => {
-        if (res.success && res.recipients) {
-          pushSent += res.recipients;
+        for (const sub of pwaSubs) {
+          if (sub.endpoint && sub.p256dhKey && sub.authKey && !endpointMap.has(sub.endpoint)) {
+            endpointMap.set(sub.endpoint, {
+              id: sub.id,
+              userId: sub.userId,
+              endpoint: sub.endpoint,
+              p256dh: sub.p256dhKey,
+              auth: sub.authKey,
+            });
+          }
         }
-      }).catch((osErr) => {
-        console.warn("[NotificationService] OneSignal dispatch note:", osErr);
-      });
+        for (const sub of registrySubs) {
+          if (sub.endpoint && sub.p256dh && sub.auth && !endpointMap.has(sub.endpoint)) {
+            endpointMap.set(sub.endpoint, sub);
+          }
+        }
 
-      await Promise.allSettled([...pushPromises, oneSignalPromise]);
+        const activeSubs = Array.from(endpointMap.values());
+        const pushPayload = JSON.stringify({
+          title,
+          body,
+          image: image || undefined,
+          url: link,
+          unreadCount: 1,
+          badgeCount: 1,
+          icon,
+          badge,
+          tag: stableTag,
+          renotify: true,
+          requireInteraction: priority === "HIGH" || priority === "URGENT",
+          data: {
+            url: link,
+            notificationId: firstNotificationId,
+            type: normalizedType,
+            category: normalizedCategory,
+            tag: stableTag,
+            image: image || undefined,
+            ...data,
+          },
+        });
+
+        await Promise.allSettled(
+          activeSubs.map(async (sub) => {
+            try {
+              await webpush.sendNotification(
+                { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
+                pushPayload,
+                { TTL: 86400, urgency: "high", headers: { Urgency: "high" } }
+              );
+              pushSent++;
+            } catch (pushErr: any) {
+              pushFailed++;
+              const statusCode = pushErr?.statusCode || pushErr?.status;
+              if (statusCode === 404 || statusCode === 410) {
+                await prisma.pushSubscription
+                  .updateMany({ where: { endpoint: sub.endpoint }, data: { isActive: false } })
+                  .catch(() => {});
+              }
+            }
+          })
+        );
+      }
 
       // Update deliveredAt timestamp for created notifications
       if (firstNotificationId) {
