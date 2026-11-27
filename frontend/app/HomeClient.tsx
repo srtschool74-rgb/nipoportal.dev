@@ -4,7 +4,6 @@ import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Capacitor } from "@capacitor/core";
 import SplashScreen from "@/frontend/components/ui/SplashScreen";
-import ModernLoginForm from "@/frontend/components/ModernLoginForm";
 import { getPersistedNativeSession } from "@/frontend/lib/authPersistence";
 
 interface HomeClientProps {
@@ -94,37 +93,30 @@ export default function HomeClient({
     }
   }, [authenticatedRole, router]);
 
-  // When splash loading animation completes: go to dashboard if logged in, or reveal login form
+  // When splash loading animation completes: go to dashboard if logged in, or navigate to /login
   const handleSplashComplete = () => {
     setShowSplash(false);
     if (typeof window !== "undefined") {
       window.dispatchEvent(new CustomEvent("splash-complete"));
       if (!targetDashboard) {
-        // Automatically triggers Install App popup on login page once splash completes
         window.dispatchEvent(new CustomEvent("open-install-prompt"));
       }
     }
     if (targetDashboard) {
       router.replace(targetDashboard);
     } else {
-      router.replace("/login");
+      const params = new URLSearchParams();
+      if (initialError) params.set("error", initialError);
+      if (initialReason) params.set("reason", initialReason);
+      const qs = params.toString();
+      router.replace(qs ? `/login?${qs}` : "/login");
     }
   };
 
   return (
-    <>
-      {showSplash && (
-        <SplashScreen
-          forceShow={true}
-          onComplete={handleSplashComplete}
-        />
-      )}
-      <ModernLoginForm
-        schoolName={schoolName}
-        schoolLogo={schoolLogo || "/logo/srt-logo.svg"}
-        initialError={initialError}
-        initialReason={initialReason}
-      />
-    </>
+    <SplashScreen
+      forceShow={true}
+      onComplete={handleSplashComplete}
+    />
   );
 }
