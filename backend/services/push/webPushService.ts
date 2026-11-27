@@ -114,8 +114,8 @@ export async function sendPushToSubscription(
   const payloadString = JSON.stringify({
     title: payload.title,
     body: payload.body,
-    icon: payload.icon || "/icons/icon-192x192.png",
-    badge: payload.badge || "/icons/icon-192x192.png",
+    icon: payload.icon || "/icon-192x192.png",
+    badge: payload.badge || "/badge-72x72.png",
     url: payload.url || "/dashboard",
     tag: payload.tag || (notificationId ? `notif-${notificationId}` : `portal-${sub.userId || "alert"}`),
     renotify: true,

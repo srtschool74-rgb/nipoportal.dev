@@ -128,8 +128,8 @@ export async function sendUniversalNotification(
     tag,
     category = "MESSAGE",
     priority = "HIGH",
-    icon = "/icons/icon-192x192.png",
-    badge = "/icons/icon-192x192.png",
+    icon = "/icon-192x192.png",
+    badge = "/badge-72x72.png",
   } = options;
 
   let notificationId = "";
