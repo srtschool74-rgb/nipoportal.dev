@@ -44,10 +44,17 @@ export async function GET(request: Request) {
     ];
 
     if (since) {
-      // Incremental sync: only messages after client's latest message timestamp
+      // Incremental sync: new messages OR messages whose read/delivery/edit state changed since last sync
       const sinceDate = new Date(since);
       if (!isNaN(sinceDate.getTime())) {
-        conditions.push({ createdAt: { gt: sinceDate } });
+        conditions.push({
+          OR: [
+            { createdAt: { gt: sinceDate } },
+            { readAt: { gt: sinceDate } },
+            { deliveredAt: { gt: sinceDate } },
+            { editedAt: { gt: sinceDate } },
+          ],
+        });
       }
     } else {
       // Initial load: check user conversation meta (clear history boundary)

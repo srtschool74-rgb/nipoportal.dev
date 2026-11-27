@@ -5,7 +5,7 @@
  * Security: Strict bypass for all /api/, NextAuth, and dynamic private data.
  */
 
-const CACHE_NAME = "srt-pwa-v22-live";
+const CACHE_NAME = "srt-pwa-v23-live";
 const PRECACHE_ASSETS = [
   "/offline.html",
   "/manifest.webmanifest",
@@ -376,8 +376,9 @@ self.addEventListener("push", (event) => {
     if (event.data) {
       try {
         const payload = event.data.json();
-        // OneSignalSDK.sw.js (imported above) already handles OneSignal payloads; skip to prevent duplicate notifications
-        if (payload && (payload.custom?.i || (payload.custom && !payload.body))) {
+        // OneSignalSDK.sw.js (imported above) already handles OneSignal payloads;
+        // also skip any payload without an explicit body so we never show a generic fallback duplicate.
+        if (!payload || payload.custom || payload.alert !== undefined || payload.o !== undefined || !payload.body) {
           return;
         }
         if (payload.title) title = payload.title;

@@ -53,12 +53,14 @@ export default function ChatThreadClient({
   const latestMessageDateRef = useRef<string | null>(null);
   const isSyncingRef = useRef<boolean>(false);
 
-  // Keep track of the latest message timestamp for incremental polling
+  // Keep track of the latest message / receipt timestamp for incremental polling
   useEffect(() => {
     if (messages.length > 0) {
       const validDates = messages
         .filter((m) => m.status !== "sending" && m.status !== "failed")
-        .map((m) => new Date(m.createdAt).getTime())
+        .flatMap((m) => [m.createdAt, m.readAt, m.deliveredAt, m.editedAt])
+        .filter((d): d is string | Date => Boolean(d))
+        .map((d) => new Date(d).getTime())
         .filter((t) => !isNaN(t));
 
       if (validDates.length > 0) {
@@ -187,13 +189,13 @@ export default function ChatThreadClient({
       }, delay);
     };
 
-    startPolling(4000);
+    startPolling(2500);
 
     const onUserActive = () => {
       lastUserActivity = Date.now();
-      if (currentDelay !== 4000 && !document.hidden) {
+      if (currentDelay !== 2500 && !document.hidden) {
         syncMessages();
-        startPolling(4000);
+        startPolling(2500);
       }
     };
 
