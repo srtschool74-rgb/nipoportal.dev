@@ -29,28 +29,38 @@ export function notifyStatsUpdated(): void {
 export function useStatsLiveRefresh(initialSummary: AdminDashboardSummary | null = null) {
   const [summary, setSummary] = useState<AdminDashboardSummary | null>(initialSummary);
   const [isLoading, setIsLoading] = useState<boolean>(initialSummary === null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (initialSummary !== null) {
       setSummary(initialSummary);
       setIsLoading(false);
+      setError(null);
     }
   }, [initialSummary]);
 
   const refresh = useCallback(async () => {
+    setIsLoading((prev) => (summary === null ? true : prev));
+    setError(null);
     try {
       const res = await fetch("/api/stats/summary", { cache: "no-store" });
-      if (!res.ok) return;
+      if (!res.ok) {
+        setError(`Failed to load dashboard stats (HTTP ${res.status})`);
+        return;
+      }
       const data = await res.json();
       if (data?.success && data.summary) {
         setSummary(data.summary);
+        setError(null);
+      } else {
+        setError(data?.error || "Failed to load dashboard stats");
       }
-    } catch {
-      // Non-fatal
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Network error loading dashboard stats");
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [summary]);
 
   useEffect(() => {
     if (initialSummary === null) {
@@ -88,5 +98,5 @@ export function useStatsLiveRefresh(initialSummary: AdminDashboardSummary | null
     };
   }, [initialSummary, refresh]);
 
-  return { summary, isLoading, refresh };
+  return { summary, isLoading, error, refresh };
 }

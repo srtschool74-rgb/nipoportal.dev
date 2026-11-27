@@ -14,10 +14,48 @@ interface AdminDashboardStatsGridProps {
 export default function AdminDashboardStatsGrid({
   initialSummary,
 }: AdminDashboardStatsGridProps) {
-  const { summary, isLoading } = useStatsLiveRefresh(initialSummary);
+  const { summary, isLoading, error, refresh } = useStatsLiveRefresh(initialSummary);
 
   if (isLoading && !summary) {
     return <DashboardSectionSkeleton title="Loading dashboard metrics" variant="cards" count={7} />;
+  }
+
+  if (error && !summary) {
+    return (
+      <div
+        style={{
+          padding: "1.25rem",
+          borderRadius: "12px",
+          border: "1px solid var(--border)",
+          backgroundColor: "var(--card)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: "1rem",
+          flexWrap: "wrap",
+        }}
+      >
+        <span style={{ color: "var(--danger, #ef4444)", fontSize: "0.9rem", fontWeight: 500 }}>
+          {error}
+        </span>
+        <button
+          type="button"
+          onClick={() => void refresh()}
+          style={{
+            padding: "0.45rem 0.9rem",
+            borderRadius: "8px",
+            border: "none",
+            backgroundColor: "var(--primary, #3b82f6)",
+            color: "#fff",
+            fontSize: "0.85rem",
+            fontWeight: 600,
+            cursor: "pointer",
+          }}
+        >
+          Retry
+        </button>
+      </div>
+    );
   }
 
   const stats = summary ?? initialSummary;

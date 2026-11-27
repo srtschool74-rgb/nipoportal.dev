@@ -18,6 +18,34 @@ const PRECACHE_ASSETS = [
   "/logo/srt-logo.svg",
 ];
 
+// Immediate Activation, Cache Management, and Badging Message Listener (Top-level synchronous evaluation)
+self.addEventListener("message", (event) => {
+  if (event.data) {
+    if (event.data.type === "SKIP_WAITING") {
+      self.skipWaiting();
+    }
+    if (event.data.type === "CLEAR_CACHES") {
+      caches.keys().then((keys) => Promise.all(keys.map((k) => caches.delete(k))));
+    }
+    if (event.data.type === "SET_BADGE") {
+      const c = event.data.count || 0;
+      setStoredBadgeCount(c).then((newCount) => {
+        applyAppBadge(newCount);
+      });
+    }
+    if (event.data.type === "CLEAR_BADGE") {
+      removeAppBadge();
+    }
+    if (event.data.type === "GET_BADGE") {
+      getStoredBadgeCount().then((count) => {
+        if (event.source && event.source.postMessage) {
+          event.source.postMessage({ type: "BADGE_COUNT_RESPONSE", count });
+        }
+      });
+    }
+  }
+});
+
 // Optional OneSignal Push SDK Integration
 try {
   importScripts("https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.sw.js");
@@ -49,34 +77,6 @@ self.addEventListener("activate", (event) => {
       );
     }).then(() => self.clients.claim())
   );
-});
-
-// Immediate Activation, Cache Management, and Badging Message Listener (Top-level evaluation)
-self.addEventListener("message", (event) => {
-  if (event.data) {
-    if (event.data.type === "SKIP_WAITING") {
-      self.skipWaiting();
-    }
-    if (event.data.type === "CLEAR_CACHES") {
-      caches.keys().then((keys) => Promise.all(keys.map((k) => caches.delete(k))));
-    }
-    if (event.data.type === "SET_BADGE") {
-      const c = event.data.count || 0;
-      setStoredBadgeCount(c).then((newCount) => {
-        applyAppBadge(newCount);
-      });
-    }
-    if (event.data.type === "CLEAR_BADGE") {
-      removeAppBadge();
-    }
-    if (event.data.type === "GET_BADGE") {
-      getStoredBadgeCount().then((count) => {
-        if (event.source && event.source.postMessage) {
-          event.source.postMessage({ type: "BADGE_COUNT_RESPONSE", count });
-        }
-      });
-    }
-  }
 });
 
 // ============================================================================

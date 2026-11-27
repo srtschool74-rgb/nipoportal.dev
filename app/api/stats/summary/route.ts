@@ -4,6 +4,8 @@ import { getAuthOptions } from "@/backend/auth/authOptions";
 import { getAdminDashboardSummary } from "@/backend/services/stats";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 30;
+export const preferredRegion = "hnd1";
 
 export async function GET() {
   try {
@@ -12,14 +14,14 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Protect against serverless 5s freeze by enforcing a 4.5s timeout race
+    // Protect against serverless freeze while allowing cross-region cold-start headroom
     const summaryPromise = getAdminDashboardSummary({
       role: session.user.role,
       userId: session.user.id,
     });
 
     const timeoutPromise = new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error("Database summary query timed out after 4500ms")), 4500)
+      setTimeout(() => reject(new Error("Database summary query timed out after 25000ms")), 25000)
     );
 
     const summary = await Promise.race([summaryPromise, timeoutPromise]);
@@ -28,7 +30,7 @@ export async function GET() {
       { success: true, summary, updatedAt: new Date().toISOString() },
       {
         headers: {
-          "Cache-Control": "private, no-cache, no-store, must-revalidate",
+          "Cache-Control": "private, max-age=60, stale-while-revalidate=120",
         },
       }
     );

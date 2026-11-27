@@ -2,11 +2,12 @@ import type { NextConfig } from "next";
 
 const cspHeader = `
     default-src 'self';
-    script-src 'self' 'unsafe-eval' 'unsafe-inline' https://va.vercel-scripts.com https://cdn.onesignal.com https://onesignal.com;
+    script-src 'self' 'unsafe-eval' 'unsafe-inline' https://va.vercel-scripts.com https://cdn.onesignal.com https://onesignal.com https://api.onesignal.com https://*.onesignal.com;
     style-src 'self' 'unsafe-inline' https://cdn.onesignal.com;
     img-src 'self' blob: data: https:;
     font-src 'self' data: https://cdn.onesignal.com;
-    connect-src 'self' blob: data: https: http: https://onesignal.com https://*.onesignal.com;
+    connect-src 'self' blob: data: https: http: https://api.onesignal.com https://onesignal.com https://cdn.onesignal.com https://*.onesignal.com;
+    frame-src 'self' https://onesignal.com https://cdn.onesignal.com https://*.onesignal.com https://accounts.google.com;
     worker-src 'self' blob: https://cdn.onesignal.com;
     object-src 'none';
     base-uri 'self';

@@ -23,7 +23,7 @@ const SECURITY_HEADERS: Record<string, string> = {
   "Strict-Transport-Security": "max-age=31536000; includeSubDomains; preload",
   "Permissions-Policy": "camera=(), microphone=(), geolocation=(), payment=()",
   "Content-Security-Policy":
-    "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.onesignal.com https://onesignal.com https://accounts.google.com https://apis.google.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https: wss:; frame-ancestors 'none'; object-src 'none'; base-uri 'self';",
+    "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.onesignal.com https://onesignal.com https://api.onesignal.com https://*.onesignal.com https://accounts.google.com https://apis.google.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.onesignal.com; font-src 'self' https://fonts.gstatic.com https://cdn.onesignal.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://api.onesignal.com https://onesignal.com https://cdn.onesignal.com https://*.onesignal.com https: wss:; frame-src 'self' https://onesignal.com https://cdn.onesignal.com https://*.onesignal.com https://accounts.google.com; frame-ancestors 'none'; object-src 'none'; base-uri 'self';",
 };
 
 function applySecurityHeaders(
