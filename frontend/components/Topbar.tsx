@@ -15,6 +15,11 @@ import {
   updateUnreadStatsLocally,
   type UnreadStats,
 } from "@/frontend/lib/notifications/unreadCountPoller";
+import {
+  requestOneSignalPermission,
+  loginToOneSignal,
+  getOneSignalSubscriptionState,
+} from "@/frontend/lib/onesignal";
 
 // Matches the key used in NotificationPopupModal
 const CLEARED_KEY = "srt_portal_notif_cleared_v1";
@@ -33,7 +38,7 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
 export default function Topbar({
   user,
 }: {
-  user: { name?: string | null; role?: string | null };
+  user: { id?: string | null; name?: string | null; role?: string | null };
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -46,11 +51,40 @@ export default function Topbar({
   const [toast, setToast] = useState<{
     message: string;
     type: "success" | "warning" | "error";
+    action?: { label: string; onClick: () => void };
   } | null>(null);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const showToast = (message: string, type: "success" | "warning" | "error", durationMs = 4000) => {
-    setToast({ message, type });
-    setTimeout(() => setToast(null), durationMs);
+  const showToast = (
+    message: string,
+    type: "success" | "warning" | "error",
+    durationMs = 4000,
+    action?: { label: string; onClick: () => void }
+  ) => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    setToast({ message, type, action });
+    toastTimerRef.current = setTimeout(() => setToast(null), durationMs);
+  };
+
+  const handleEnablePushAndRetry = async () => {
+    setToast(null);
+    const granted = await requestOneSignalPermission();
+    if (!granted) {
+      if (typeof Notification !== "undefined" && Notification.permission === "denied") {
+        showToast(
+          "Notifications are blocked in browser settings. Click the lock icon near the URL to allow them.",
+          "warning",
+          6000
+        );
+      } else {
+        showToast("Please allow browser notifications to receive alerts on this device.", "warning", 4500);
+      }
+      return;
+    }
+    if (user?.id) {
+      await loginToOneSignal(user.id).catch(() => {});
+    }
+    await handleTestLockScreenNotification();
   };
 
   const handleTestLockScreenNotification = async () => {
@@ -58,15 +92,27 @@ export default function Topbar({
     isTestingPushRef.current = true;
     setIsTestingPush(true);
     try {
-      // Ensure current device has permission & is subscribed before server dispatch
+      // Ensure current device has permission & OneSignal opt-in + external_id before server dispatch
       if (typeof window !== "undefined" && "serviceWorker" in navigator) {
         try {
-          if (typeof Notification !== "undefined" && Notification.permission !== "granted") {
-            const perm = await Notification.requestPermission();
-            if (perm !== "granted") {
-              showToast("Please allow browser notifications to receive alerts on this device.", "warning", 4000);
-              return;
-            }
+          if (typeof Notification !== "undefined" && Notification.permission === "denied") {
+            showToast(
+              "Notifications are blocked in browser settings. Click the lock icon near the URL to allow them.",
+              "warning",
+              6000
+            );
+            return;
+          }
+
+          const granted = await requestOneSignalPermission();
+          if (!granted && typeof Notification !== "undefined" && Notification.permission !== "granted") {
+            showToast("Please allow browser notifications to receive alerts on this device.", "warning", 4000);
+            return;
+          }
+
+          if (user?.id) {
+            await loginToOneSignal(user.id).catch(() => {});
+            console.log("[Topbar] OneSignal state before test push:", getOneSignalSubscriptionState());
           }
 
           const reg = await navigator.serviceWorker.ready;
@@ -154,7 +200,8 @@ export default function Topbar({
         showToast(
           data.error || "No active device registered for this account. Enable notifications on this device.",
           "warning",
-          5000
+          7000,
+          { label: "Enable Notifications", onClick: handleEnablePushAndRetry }
         );
       } else {
         showToast(data?.error || "Could not send test notification.", "error", 4500);
@@ -401,14 +448,34 @@ export default function Topbar({
             gap: "0.65rem",
             fontSize: "0.88rem",
             fontWeight: 600,
-            maxWidth: "min(420px, calc(100vw - 32px))",
-            pointerEvents: "none",
+            maxWidth: "min(440px, calc(100vw - 32px))",
+            pointerEvents: toast.action ? "auto" : "none",
           }}
         >
           {toast.type === "success" && <CheckCircle2 size={18} color="#10b981" style={{ flexShrink: 0 }} />}
           {toast.type === "warning" && <AlertTriangle size={18} color="#f59e0b" style={{ flexShrink: 0 }} />}
           {toast.type === "error" && <AlertCircle size={18} color="#ef4444" style={{ flexShrink: 0 }} />}
-          <span>{toast.message}</span>
+          <span style={{ flex: 1 }}>{toast.message}</span>
+          {toast.action && (
+            <button
+              type="button"
+              onClick={toast.action.onClick}
+              style={{
+                padding: "0.35rem 0.65rem",
+                borderRadius: "8px",
+                border: "none",
+                background: "#2563eb",
+                color: "#ffffff",
+                fontSize: "0.78rem",
+                fontWeight: 700,
+                cursor: "pointer",
+                whiteSpace: "nowrap",
+                flexShrink: 0,
+              }}
+            >
+              {toast.action.label}
+            </button>
+          )}
         </div>
       )}
     </header>

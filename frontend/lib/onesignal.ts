@@ -40,12 +40,39 @@ export async function initOneSignal(): Promise<void> {
       if (err?.message?.includes("already initialized") || String(err).includes("already initialized")) {
         isInitialized = true;
       } else {
+        initPromise = null;
         console.warn("[OneSignal] Initialization note:", err);
       }
     }
   })();
 
   return initPromise;
+}
+
+export interface OneSignalSubscriptionState {
+  externalId: string | null;
+  subscriptionId: string | null;
+  optedIn: boolean;
+  permission: NotificationPermission;
+}
+
+/**
+ * Read non-secret OneSignal Web SDK v16 subscription state for diagnostics.
+ */
+export function getOneSignalSubscriptionState(): OneSignalSubscriptionState {
+  if (typeof window === "undefined") {
+    return { externalId: null, subscriptionId: null, optedIn: false, permission: "default" };
+  }
+  const win = window as any;
+  const osInstance = win.OneSignal || OneSignal;
+  const permission: NotificationPermission =
+    typeof Notification !== "undefined" ? Notification.permission : "default";
+  return {
+    externalId: (osInstance?.User?.externalId as string | undefined) || null,
+    subscriptionId: (osInstance?.User?.PushSubscription?.id as string | undefined) || null,
+    optedIn: Boolean(osInstance?.User?.PushSubscription?.optedIn),
+    permission,
+  };
 }
 
 /**
@@ -76,7 +103,21 @@ export async function loginToOneSignal(userId: string): Promise<boolean> {
       if (osInstance && typeof osInstance.login === "function") {
         await osInstance.login(cleanId);
         currentLoggedInUserId = cleanId;
-        console.log("[OneSignal] User linked with external_id:", cleanId);
+        if (
+          typeof Notification !== "undefined" &&
+          Notification.permission === "granted" &&
+          osInstance.User?.PushSubscription &&
+          !osInstance.User.PushSubscription.optedIn &&
+          typeof osInstance.User.PushSubscription.optIn === "function"
+        ) {
+          await osInstance.User.PushSubscription.optIn().catch((optErr: unknown) => {
+            console.warn("[OneSignal] PushSubscription.optIn warning:", optErr);
+          });
+        }
+        console.log("[OneSignal] User linked:", {
+          external_id: cleanId,
+          ...getOneSignalSubscriptionState(),
+        });
         return true;
       }
       return false;
@@ -127,12 +168,27 @@ export async function requestOneSignalPermission(): Promise<boolean> {
   try {
     await initOneSignal();
     const win = window as any;
-    if (win.OneSignal && win.OneSignal.Notifications && typeof win.OneSignal.Notifications.requestPermission === "function") {
-      await win.OneSignal.Notifications.requestPermission();
-      return Boolean(win.OneSignal.Notifications.permission);
+    const osInstance = win.OneSignal || OneSignal;
+    if (osInstance?.Notifications && typeof osInstance.Notifications.requestPermission === "function") {
+      await osInstance.Notifications.requestPermission();
+    } else if (typeof Notification !== "undefined" && Notification.requestPermission) {
+      await Notification.requestPermission();
     }
-    await OneSignal.Notifications.requestPermission();
-    return Boolean(OneSignal.Notifications.permission);
+    const granted =
+      Boolean(osInstance?.Notifications?.permission) ||
+      (typeof Notification !== "undefined" && Notification.permission === "granted");
+    if (
+      granted &&
+      osInstance?.User?.PushSubscription &&
+      !osInstance.User.PushSubscription.optedIn &&
+      typeof osInstance.User.PushSubscription.optIn === "function"
+    ) {
+      await osInstance.User.PushSubscription.optIn().catch((optErr: unknown) => {
+        console.warn("[OneSignal] PushSubscription.optIn warning:", optErr);
+      });
+    }
+    console.log("[OneSignal] Permission & subscription state:", getOneSignalSubscriptionState());
+    return granted;
   } catch (err) {
     console.warn("[OneSignal] Request permission error:", err);
     return false;

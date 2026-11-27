@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { getOrCreateDeviceFingerprint } from "@/frontend/hooks/usePushNotification";
 import { Bell, X } from "lucide-react";
 import { initPushNotifications, loginToPushService } from "@/frontend/lib/pushNotifications";
-import { initOneSignal, loginToOneSignal } from "@/frontend/lib/onesignal";
+import { initOneSignal, loginToOneSignal, requestOneSignalPermission } from "@/frontend/lib/onesignal";
 
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
@@ -31,6 +31,7 @@ export default function PushDeviceAutoBinder({ userId }: { userId: string }) {
   const router = useRouter();
   const lastSyncRef = useRef<number>(0);
   const [showPromptBanner, setShowPromptBanner] = useState(false);
+  const [permissionBlocked, setPermissionBlocked] = useState(false);
   const [isRegistering, setIsRegistering] = useState(false);
 
   useEffect(() => {
@@ -127,6 +128,9 @@ export default function PushDeviceAutoBinder({ userId }: { userId: string }) {
           return;
         }
 
+        // Ensure OneSignal initializes, links external_id, and opts in before reading PushManager
+        await loginToPushService(userId).catch(() => false);
+
         const reg = await navigator.serviceWorker.ready;
         let sub = await reg.pushManager.getSubscription();
 
@@ -219,41 +223,55 @@ export default function PushDeviceAutoBinder({ userId }: { userId: string }) {
   const handleEnableNotifications = async () => {
     setIsRegistering(true);
     try {
-      if ("Notification" in window) {
-        const perm = await Notification.requestPermission();
-        try {
-          localStorage.setItem("srt_notif_prompted_once", "true");
-        } catch {}
-        if (perm === "granted") {
-          setShowPromptBanner(false);
+      if (typeof Notification !== "undefined" && Notification.permission === "denied") {
+        setPermissionBlocked(true);
+        return;
+      }
+
+      const granted = await requestOneSignalPermission();
+      try {
+        localStorage.setItem("srt_notif_prompted_once", "true");
+      } catch {}
+
+      if (granted) {
+        setPermissionBlocked(false);
+        setShowPromptBanner(false);
+        await loginToOneSignal(userId).catch(() => {});
+
+        if ("serviceWorker" in navigator) {
           const reg = await navigator.serviceWorker.ready;
-          const keyRes = await fetch("/api/notifications/push/public-key").catch(() => null);
-          const keyData = await keyRes?.json().catch(() => null);
-          if (keyData?.publicKey) {
-            const keyArr = urlBase64ToUint8Array(keyData.publicKey);
-            const sub = await reg.pushManager.subscribe({
-              userVisibleOnly: true,
-              applicationServerKey: keyArr as unknown as BufferSource,
-            });
-            if (sub) {
-              const raw = sub.toJSON();
-              await fetch("/api/push/register", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  platform: navigator.userAgent.includes("iPhone") ? "IOS" : "WEB",
-                  endpoint: sub.endpoint,
-                  token: sub.endpoint,
-                  keys: raw.keys,
-                  deviceName: navigator.userAgent.includes("iPhone") ? "iPhone Safari PWA" : "Desktop PWA",
-                  userAgent: navigator.userAgent,
-                }),
-              });
+          let sub = await reg.pushManager.getSubscription();
+          if (!sub) {
+            const keyRes = await fetch("/api/notifications/push/public-key").catch(() => null);
+            const keyData = await keyRes?.json().catch(() => null);
+            if (keyData?.publicKey) {
+              const keyArr = urlBase64ToUint8Array(keyData.publicKey);
+              sub = await reg.pushManager.subscribe({
+                userVisibleOnly: true,
+                applicationServerKey: keyArr as unknown as BufferSource,
+              }).catch(() => null);
             }
           }
-        } else {
-          setShowPromptBanner(false);
+          if (sub) {
+            const raw = sub.toJSON();
+            await fetch("/api/push/register", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                platform: navigator.userAgent.includes("iPhone") ? "IOS" : "WEB",
+                endpoint: sub.endpoint,
+                token: sub.endpoint,
+                keys: raw.keys,
+                deviceName: navigator.userAgent.includes("iPhone") ? "iPhone Safari PWA" : "Desktop PWA",
+                userAgent: navigator.userAgent,
+              }),
+            });
+          }
         }
+      } else if (typeof Notification !== "undefined" && Notification.permission === "denied") {
+        setPermissionBlocked(true);
+      } else {
+        setShowPromptBanner(false);
       }
     } catch (e) {
       console.warn("Permission request error:", e);
@@ -311,32 +329,36 @@ export default function PushDeviceAutoBinder({ userId }: { userId: string }) {
 
       <div style={{ flex: 1, minWidth: 0 }}>
         <h4 style={{ margin: 0, fontSize: "0.88rem", fontWeight: 700, color: "var(--text-primary, #0f172a)" }}>
-          Enable Notifications
+          {permissionBlocked ? "Notifications Blocked" : "Enable Notifications"}
         </h4>
         <p style={{ margin: "0.15rem 0 0", fontSize: "0.78rem", color: "var(--text-secondary, #64748b)" }}>
-          Receive instant alerts for messages, report cards, and announcements.
+          {permissionBlocked
+            ? "Allow notifications in your browser's site settings (lock icon near URL) to receive alerts."
+            : "Receive instant alerts for messages, report cards, and announcements."}
         </p>
       </div>
 
       <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", flexShrink: 0 }}>
-        <button
-          type="button"
-          onClick={handleEnableNotifications}
-          disabled={isRegistering}
-          style={{
-            padding: "0.4rem 0.75rem",
-            background: "var(--primary, #2563eb)",
-            color: "#ffffff",
-            border: "none",
-            borderRadius: "8px",
-            fontSize: "0.78rem",
-            fontWeight: 600,
-            cursor: "pointer",
-            whiteSpace: "nowrap",
-          }}
-        >
-          {isRegistering ? "..." : "Enable"}
-        </button>
+        {!permissionBlocked && (
+          <button
+            type="button"
+            onClick={handleEnableNotifications}
+            disabled={isRegistering}
+            style={{
+              padding: "0.4rem 0.75rem",
+              background: "var(--primary, #2563eb)",
+              color: "#ffffff",
+              border: "none",
+              borderRadius: "8px",
+              fontSize: "0.78rem",
+              fontWeight: 600,
+              cursor: "pointer",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {isRegistering ? "..." : "Enable"}
+          </button>
+        )}
 
         <button
           type="button"

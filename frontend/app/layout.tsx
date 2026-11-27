@@ -234,54 +234,7 @@ export default async function RootLayout({
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
         />
-        {/* OneSignal Web Push SDK v16 (deferred until after load/idle so it never blocks first paint) */}
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
-              (function() {
-                if (typeof window === "undefined" || window.__oneSignalInitQueued) return;
-                window.__oneSignalInitQueued = true;
-                window.OneSignalDeferred = window.OneSignalDeferred || [];
-                window.OneSignalDeferred.push(async function(OneSignal) {
-                  if (window.__oneSignalInitialized) return;
-                  window.__oneSignalInitialized = true;
-                  try {
-                    await OneSignal.init({
-                      appId: "${process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID || "63a34381-365f-40d4-b3ed-244c408f7243"}",
-                      safari_web_id: "web.onesignal.auto.2e21fe47-8329-4413-bae9-ecef4da3342d",
-                    });
-                  } catch (err) {
-                    console.debug("[OneSignal] Non-fatal init skipped:", err);
-                  }
-                });
-                function loadOneSignalSdk() {
-                  if (document.querySelector('script[data-onesignal-sdk="true"]')) return;
-                  var s = document.createElement("script");
-                  s.src = "https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js";
-                  s.async = true;
-                  s.defer = true;
-                  s.setAttribute("data-onesignal-sdk", "true");
-                  document.head.appendChild(s);
-                }
-                if (document.readyState === "complete") {
-                  if ("requestIdleCallback" in window) {
-                    window.requestIdleCallback(loadOneSignalSdk, { timeout: 2500 });
-                  } else {
-                    setTimeout(loadOneSignalSdk, 800);
-                  }
-                } else {
-                  window.addEventListener("load", function() {
-                    if ("requestIdleCallback" in window) {
-                      window.requestIdleCallback(loadOneSignalSdk, { timeout: 2500 });
-                    } else {
-                      setTimeout(loadOneSignalSdk, 800);
-                    }
-                  }, { once: true });
-                }
-              })();
-            `,
-          }}
-        />
+        {/* OneSignal Web Push SDK v16 is initialized once via frontend/lib/onesignal.ts */}
       </head>
       <body suppressHydrationWarning>
         <NavigationProgressBar />
