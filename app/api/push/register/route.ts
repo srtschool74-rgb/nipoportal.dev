@@ -90,10 +90,14 @@ export async function POST(req: Request) {
       message: "Device registered for push notifications successfully.",
     });
   } catch (err: any) {
-    console.error("[PushRegister] Error registering push subscription:", err);
+    console.error("[/api/push/register]", err);
     return NextResponse.json(
-      { error: err?.message || "Failed to register push subscription." },
-      { status: 500 }
+      {
+        success: false,
+        nonFatal: true,
+        error: err?.message || "Failed to register push subscription.",
+      },
+      { status: 503 }
     );
   }
 }

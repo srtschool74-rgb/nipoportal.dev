@@ -8,13 +8,17 @@ import DashboardSectionSkeleton from "@/frontend/components/ui/DashboardSectionS
 import styles from "@/frontend/app/dashboard/dashboard.module.css";
 
 interface AdminDashboardStatsGridProps {
-  initialSummary: AdminDashboardSummary;
+  initialSummary: AdminDashboardSummary | null;
 }
 
 export default function AdminDashboardStatsGrid({
   initialSummary,
 }: AdminDashboardStatsGridProps) {
   const { summary, isLoading, error, refresh } = useStatsLiveRefresh(initialSummary);
+
+  if (!summary && !error) {
+    return <DashboardSectionSkeleton title="Loading dashboard metrics" variant="cards" count={7} />;
+  }
 
   if (isLoading && !summary) {
     return <DashboardSectionSkeleton title="Loading dashboard metrics" variant="cards" count={7} />;
@@ -58,7 +62,7 @@ export default function AdminDashboardStatsGrid({
     );
   }
 
-  const stats = summary ?? initialSummary;
+  const stats = summary!;
 
   return (
     <div className={styles.statsGrid}>

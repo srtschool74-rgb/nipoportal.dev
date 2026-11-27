@@ -33,21 +33,34 @@ export default function DashboardNotificationToaster() {
   const [totalUnseen, setTotalUnseen] = useState<number>(0);
   const seenIdsRef = useRef<Set<string>>(new Set());
   const isFetchingRef = useRef(false);
+  const backoffUntilRef = useRef(0);
+  const consecutiveErrorsRef = useRef(0);
 
   // Helper to fetch unseen notifications from server
   const fetchUnseenNotifications = useCallback(async () => {
     if (isFetchingRef.current || typeof window === "undefined") return;
+    if (Date.now() < backoffUntilRef.current) return;
     isFetchingRef.current = true;
 
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
     try {
       const res = await fetch("/api/notifications/unseen", {
         cache: "no-store",
+        signal: controller.signal,
       });
 
-      if (!res.ok) return;
+      if (!res.ok) {
+        consecutiveErrorsRef.current += 1;
+        backoffUntilRef.current =
+          Date.now() + Math.min(120000, 15000 * Math.pow(2, consecutiveErrorsRef.current - 1));
+        return;
+      }
 
       const data = await res.json();
       if (!data?.success || !Array.isArray(data.notifications)) return;
+      consecutiveErrorsRef.current = 0;
+      backoffUntilRef.current = 0;
 
       const incoming: InAppToast[] = data.notifications;
       const filtered = incoming.filter((n) => !seenIdsRef.current.has(n.id));
@@ -69,8 +82,12 @@ export default function DashboardNotificationToaster() {
         setTotalUnseen(data.totalUnseen || filtered.length);
       }
     } catch (err) {
+      consecutiveErrorsRef.current += 1;
+      backoffUntilRef.current =
+        Date.now() + Math.min(120000, 15000 * Math.pow(2, consecutiveErrorsRef.current - 1));
       console.debug("[NotificationToaster] Fetch note:", err);
     } finally {
+      clearTimeout(timeoutId);
       isFetchingRef.current = false;
     }
   }, []);
@@ -139,7 +156,11 @@ export default function DashboardNotificationToaster() {
     };
   }, [fetchUnseenNotifications]);
 
-  // Auto-dismiss toasts after 6 seconds (or 12s if URGENT/HIGH)
+  const handleDismiss = useCallback((id: string) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  }, []);
+
+  // Auto-dismiss toasts after 6 seconds (or 10s if URGENT/HIGH)
   useEffect(() => {
     if (toasts.length === 0) return;
 
@@ -153,11 +174,7 @@ export default function DashboardNotificationToaster() {
     return () => {
       timers.forEach((t) => clearTimeout(t));
     };
-  }, [toasts]);
-
-  const handleDismiss = (id: string) => {
-    setToasts((prev) => prev.filter((t) => t.id !== id));
-  };
+  }, [toasts, handleDismiss]);
 
   const handleToastClick = async (toast: InAppToast) => {
     handleDismiss(toast.id);

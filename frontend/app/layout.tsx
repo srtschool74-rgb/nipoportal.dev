@@ -215,8 +215,6 @@ export default async function RootLayout({
   return (
     <html lang="en" data-theme={initialTheme} suppressHydrationWarning>
       <head>
-        {/* Preload school crest logo for instant splash rendering */}
-        <link rel="preload" href="/logo/srt-logo.svg" as="image" type="image/svg+xml" />
         {/* PWA & Mobile Web App Manifest Links */}
         <link rel="manifest" href="/manifest.webmanifest" />
         <meta name="mobile-web-app-capable" content="yes" />
@@ -241,13 +239,23 @@ export default async function RootLayout({
         <script
           dangerouslySetInnerHTML={{
             __html: `
-              window.OneSignalDeferred = window.OneSignalDeferred || [];
-              OneSignalDeferred.push(async function(OneSignal) {
-                await OneSignal.init({
-                  appId: "${process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID || "63a34381-365f-40d4-b3ed-244c408f7243"}",
-                  safari_web_id: "web.onesignal.auto.2e21fe47-8329-4413-bae9-ecef4da3342d",
+              (function() {
+                if (typeof window === "undefined" || window.__oneSignalInitQueued) return;
+                window.__oneSignalInitQueued = true;
+                window.OneSignalDeferred = window.OneSignalDeferred || [];
+                window.OneSignalDeferred.push(async function(OneSignal) {
+                  if (window.__oneSignalInitialized) return;
+                  window.__oneSignalInitialized = true;
+                  try {
+                    await OneSignal.init({
+                      appId: "${process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID || "63a34381-365f-40d4-b3ed-244c408f7243"}",
+                      safari_web_id: "web.onesignal.auto.2e21fe47-8329-4413-bae9-ecef4da3342d",
+                    });
+                  } catch (err) {
+                    console.debug("[OneSignal] Non-fatal init skipped:", err);
+                  }
                 });
-              });
+              })();
             `,
           }}
         />

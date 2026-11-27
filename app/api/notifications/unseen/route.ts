@@ -66,7 +66,7 @@ export async function GET() {
     };
 
     const timeoutPromise = new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error("Query timed out after 4500ms")), 4500)
+      setTimeout(() => reject(new Error("Query timed out after 15000ms")), 15000)
     );
 
     const { unseen, totalUnseen } = await Promise.race([fetchWork(), timeoutPromise]);

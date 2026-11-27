@@ -11,6 +11,7 @@ import { startOfSchoolDay, endOfSchoolDay, getSchoolNow } from "@/lib/time";
 import { getAdminDashboardSummary, getParentStats, summarizeAttendanceRecords, computeStudentExamResult } from "@/backend/services/stats";
 import { countSchoolWorkingDays, getEffectiveAcademicYearRange } from "@/backend/lib/services/attendanceCalculation";
 import AdminDashboardStatsGrid from "@/frontend/components/admin/AdminDashboardStatsGrid";
+import type { AdminDashboardSummary } from "@/shared/types/stats";
 import { getUserInitials } from "@/frontend/lib/initials";
 
 export const dynamic = "force-dynamic";
@@ -59,35 +60,7 @@ export default async function AdminDashboardPage({
 
   const resolvedSearchParams = await searchParams;
 
-  let dashboardSummary = {
-    students: {
-      activeStudents: 0,
-      allStudentsIncludingInactive: 0,
-      inactiveOrGraduatedStudents: 0,
-      dayScholars: 0,
-      hostelers: 0,
-    },
-    teachers: {
-      activeTeachers: 0,
-      allTeachersIncludingInactive: 0,
-    },
-    parents: {
-      totalParents: 0,
-      activeParents: 0,
-      enabledParents: 0,
-      parentsWithoutActiveStudents: 0,
-      totalStudentsCount: 0,
-    },
-    classes: {
-      totalSections: 0,
-      distinctClasses: 0,
-      sectionsWithClassTeacher: 0,
-    },
-    subjects: {
-      distinctSubjects: 0,
-      totalAllocations: 0,
-    },
-  };
+  let dashboardSummary: AdminDashboardSummary | null = null;
   let classes: { id: string; name: string; section: string }[] = [];
 
   try {

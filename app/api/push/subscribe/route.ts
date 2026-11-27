@@ -144,13 +144,15 @@ export async function POST(req: Request) {
     });
   } catch (error: unknown) {
     const errMessage = error instanceof Error ? error.message : "Internal server error";
-    console.error("[Push API] Subscribe error:", error);
+    console.error("[/api/push/subscribe]", error);
     return NextResponse.json(
       {
+        success: false,
+        nonFatal: true,
         error: "Database error while registering push subscription.",
         details: process.env.NODE_ENV === "development" ? errMessage : undefined,
       },
-      { status: 500 }
+      { status: 503 }
     );
   }
 }
