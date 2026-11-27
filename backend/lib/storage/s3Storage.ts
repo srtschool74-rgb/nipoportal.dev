@@ -25,6 +25,15 @@ export function getS3Region(): string {
   );
 }
 
+export function getS3Endpoint(): string | undefined {
+  return (
+    process.env.S3_ENDPOINT ||
+    process.env.S3_UPLOADS_ENDPOINT ||
+    process.env.AWS_S3_ENDPOINT ||
+    undefined
+  );
+}
+
 export function getS3Credentials(): { accessKeyId: string; secretAccessKey: string; sessionToken?: string } | undefined {
   const accessKeyId =
     process.env.S3_ACCESS_KEY_ID ||
@@ -67,26 +76,31 @@ export function isS3Configured(): boolean {
 let cachedS3Client: S3Client | null = null;
 let lastClientBucket: string | undefined = undefined;
 let lastClientRegion: string | undefined = undefined;
+let lastClientEndpoint: string | undefined = undefined;
 let lastAccessKey: string | undefined = undefined;
 
 function getS3Client(): S3Client | null {
   const bucket = getS3BucketName();
   if (!bucket) return null;
   const region = getS3Region();
+  const endpoint = getS3Endpoint();
   const credentials = getS3Credentials();
 
   if (
     !cachedS3Client || 
     lastClientBucket !== bucket || 
     lastClientRegion !== region ||
+    lastClientEndpoint !== endpoint ||
     lastAccessKey !== credentials?.accessKeyId
   ) {
     cachedS3Client = new S3Client({
       region,
+      ...(endpoint ? { endpoint, forcePathStyle: true } : {}),
       ...(credentials ? { credentials } : {}),
     });
     lastClientBucket = bucket;
     lastClientRegion = region;
+    lastClientEndpoint = endpoint;
     lastAccessKey = credentials?.accessKeyId;
   }
   return cachedS3Client;

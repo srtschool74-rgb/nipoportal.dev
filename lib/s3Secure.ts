@@ -17,6 +17,7 @@ import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 export interface SecureS3Config {
   bucket: string;
   region: string;
+  endpoint?: string;
   accessKeyId: string;
   secretAccessKey: string;
   sessionToken?: string;
@@ -52,6 +53,11 @@ export function getSecureS3Config(): SecureS3Config | null {
     process.env.S3_UPLOADS_SECRET_KEY ||
     process.env.S3_SECRET_ACCESS_KEY;
 
+  const endpoint =
+    process.env.S3_ENDPOINT ||
+    process.env.S3_UPLOADS_ENDPOINT ||
+    process.env.AWS_S3_ENDPOINT;
+
   const sessionToken =
     process.env.APP_AWS_SESSION_TOKEN ||
     process.env.AWS_SESSION_TOKEN ||
@@ -64,6 +70,7 @@ export function getSecureS3Config(): SecureS3Config | null {
   return {
     bucket,
     region,
+    ...(endpoint ? { endpoint } : {}),
     accessKeyId,
     secretAccessKey,
     ...(sessionToken ? { sessionToken } : {}),
@@ -88,10 +95,11 @@ export function getSecureS3Client(): S3Client | null {
   const config = getSecureS3Config();
   if (!config) return null;
 
-  const cacheKey = `${config.region}:${config.accessKeyId}:${config.bucket}`;
+  const cacheKey = `${config.region}:${config.endpoint || ""}:${config.accessKeyId}:${config.bucket}`;
   if (!cachedSecureClient || lastClientKey !== cacheKey) {
     cachedSecureClient = new S3Client({
       region: config.region,
+      ...(config.endpoint ? { endpoint: config.endpoint, forcePathStyle: true } : {}),
       credentials: {
         accessKeyId: config.accessKeyId,
         secretAccessKey: config.secretAccessKey,
