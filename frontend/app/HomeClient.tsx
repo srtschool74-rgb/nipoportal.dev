@@ -69,6 +69,9 @@ export default function HomeClient({
         router.prefetch(target);
       } catch {}
     } else {
+      try {
+        router.prefetch("/login");
+      } catch {}
       getPersistedNativeSession()
         .then((session) => {
           if (session?.role) {

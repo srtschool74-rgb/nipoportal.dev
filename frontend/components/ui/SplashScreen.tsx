@@ -48,11 +48,15 @@ export default function SplashScreen({
   });
 
   const [isExiting, setIsExiting] = useState(false);
+  const isExitingRef = useRef(false);
+  const onCompleteRef = useRef(onComplete);
+  onCompleteRef.current = onComplete;
   const exitTimerRef = useRef<NodeJS.Timeout | null>(null);
   const autoFinishTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const handleFinish = useCallback(() => {
-    if (isExiting) return;
+    if (isExitingRef.current) return;
+    isExitingRef.current = true;
     setIsExiting(true);
 
     try {
@@ -62,9 +66,10 @@ export default function SplashScreen({
     }
 
     exitTimerRef.current = setTimeout(() => {
-      setIsVisible(false);
-      if (onComplete) {
-        onComplete();
+      if (onCompleteRef.current) {
+        onCompleteRef.current();
+      } else {
+        setIsVisible(false);
       }
       if (redirectTo) {
         if (typeof window !== "undefined" && window.location.pathname !== redirectTo) {
@@ -72,7 +77,7 @@ export default function SplashScreen({
         }
       }
     }, 550);
-  }, [isExiting, onComplete, redirectTo, router]);
+  }, [redirectTo, router]);
 
   useEffect(() => {
     if (!isVisible) return;
