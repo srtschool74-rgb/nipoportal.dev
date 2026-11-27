@@ -4,9 +4,27 @@ import { getAuthOptions } from "@/backend/auth/authOptions";
 import { prisma } from "@/backend/db/prisma";
 import webpush from "web-push";
 import { sendOneSignalPush, ONESIGNAL_APP_ID } from "@/backend/services/push/oneSignalService";
-import { dispatchNotification } from "@/lib/dispatcher";
 
 export const dynamic = "force-dynamic";
+
+// Short-lived in-memory idempotency cache (prevents double-send on rapid double click / retry)
+const recentTestPushKeys = new Map<string, number>();
+const IDEMPOTENCY_TTL_MS = 30_000;
+
+function checkAndRecordIdempotency(userId: string, key?: string): boolean {
+  if (!key) return true;
+  const now = Date.now();
+  for (const [k, exp] of recentTestPushKeys.entries()) {
+    if (now > exp) recentTestPushKeys.delete(k);
+  }
+  const composite = `${userId}:${key}`;
+  const existing = recentTestPushKeys.get(composite);
+  if (existing && now < existing) {
+    return false;
+  }
+  recentTestPushKeys.set(composite, now + IDEMPOTENCY_TTL_MS);
+  return true;
+}
 
 // Ensure VAPID keys are initialized as auxiliary fallback
 const VAPID_PUBLIC_KEY =
@@ -35,7 +53,23 @@ export async function POST(req: Request) {
     }
 
     const userId = session.user.id;
+    const userRole = String(session.user.role || "").toUpperCase();
+    if (userRole !== "ADMIN" && userRole !== "SUPER_ADMIN") {
+      return NextResponse.json({ error: "Forbidden. Admin role required." }, { status: 403 });
+    }
     const userName = session.user.name || "User";
+
+    const bodyPayload = await req.json().catch(() => ({}));
+    const idempotencyKey = typeof bodyPayload.idempotencyKey === "string" ? bodyPayload.idempotencyKey.trim() : "";
+
+    if (idempotencyKey && !checkAndRecordIdempotency(userId, idempotencyKey)) {
+      return NextResponse.json({
+        success: true,
+        deduplicated: true,
+        userId,
+        message: "Duplicate test push request ignored (idempotent).",
+      });
+    }
 
     // 1. Calculate recipient's exact unread notification count from PostgreSQL
     let unreadCount = 1;
@@ -49,16 +83,15 @@ export async function POST(req: Request) {
       unreadCount = 1;
     }
 
-    const bodyPayload = await req.json().catch(() => ({}));
-    const isBroadcast = Boolean(bodyPayload.broadcast);
     const title = bodyPayload.title || "🔔 Portal Push Test";
     const body =
       bodyPayload.body ||
       bodyPayload.message ||
       "OneSignal Web Push & direct WebPush are operational on SRT Portal!";
     const url = bodyPayload.url || "/dashboard";
+    const stableTag = idempotencyKey ? `test-${userId}-${idempotencyKey}` : `test-${userId}`;
 
-    // Test push endpoint strictly targets the current authenticated user's registered devices
+    // 2. Primary Channel: Send strictly to calling admin's external_id (NEVER broadcast)
     const oneSignalResult = await sendOneSignalPush({
       userId,
       broadcast: false,
@@ -67,59 +100,63 @@ export async function POST(req: Request) {
       url,
       unreadCount,
       category: "TEST",
+      tag: stableTag,
     });
 
-    // 3. Auxiliary Dispatch: Direct Web Push to user's registered subscriptions
-    const [pushSubs, pwaSubs, registrySubs] = await Promise.all([
-      prisma.pushSubscription.findMany({
-        where: { userId, isActive: true },
-        select: { id: true, endpoint: true, p256dh: true, auth: true, platform: true, deviceName: true },
-      }),
-      prisma.pwaSubscription.findMany({
-        where: { userId },
-        select: { id: true, endpoint: true, p256dhKey: true, authKey: true, deviceType: true },
-      }).catch(() => []),
-      prisma.deviceNotificationsRegistry.findMany({
-        where: { userId },
-        select: { id: true, endpoint: true, p256dh: true, auth: true, deviceId: true },
-      }).catch(() => []),
-    ]);
+    const oneSignalDelivered = oneSignalResult.success && (oneSignalResult.recipients ?? 0) > 0;
 
+    // 3. Fallback Channel ONLY if OneSignal did not deliver to any device for this admin
     const targetMap = new Map<string, { endpoint: string; p256dh: string; auth: string; source: string; platform: string }>();
+    if (!oneSignalDelivered) {
+      const [pushSubs, pwaSubs, registrySubs] = await Promise.all([
+        prisma.pushSubscription.findMany({
+          where: { userId, isActive: true },
+          select: { id: true, endpoint: true, p256dh: true, auth: true, platform: true, deviceName: true },
+        }),
+        prisma.pwaSubscription.findMany({
+          where: { userId },
+          select: { id: true, endpoint: true, p256dhKey: true, authKey: true, deviceType: true },
+        }).catch(() => []),
+        prisma.deviceNotificationsRegistry.findMany({
+          where: { userId },
+          select: { id: true, endpoint: true, p256dh: true, auth: true, deviceId: true },
+        }).catch(() => []),
+      ]);
 
-    for (const sub of pushSubs) {
-      if (sub.endpoint && sub.p256dh && sub.auth) {
-        targetMap.set(sub.endpoint, {
-          endpoint: sub.endpoint,
-          p256dh: sub.p256dh,
-          auth: sub.auth,
-          source: "pushSubscription",
-          platform: sub.platform || "WEB",
-        });
+      for (const sub of pushSubs) {
+        if (sub.endpoint && sub.p256dh && sub.auth) {
+          targetMap.set(sub.endpoint, {
+            endpoint: sub.endpoint,
+            p256dh: sub.p256dh,
+            auth: sub.auth,
+            source: "pushSubscription",
+            platform: sub.platform || "WEB",
+          });
+        }
       }
-    }
 
-    for (const sub of pwaSubs) {
-      if (sub.endpoint && sub.p256dhKey && sub.authKey && !targetMap.has(sub.endpoint)) {
-        targetMap.set(sub.endpoint, {
-          endpoint: sub.endpoint,
-          p256dh: sub.p256dhKey,
-          auth: sub.authKey,
-          source: "pwaSubscription",
-          platform: sub.deviceType?.toUpperCase() === "IOS" ? "IOS" : "WEB",
-        });
+      for (const sub of pwaSubs) {
+        if (sub.endpoint && sub.p256dhKey && sub.authKey && !targetMap.has(sub.endpoint)) {
+          targetMap.set(sub.endpoint, {
+            endpoint: sub.endpoint,
+            p256dh: sub.p256dhKey,
+            auth: sub.authKey,
+            source: "pwaSubscription",
+            platform: sub.deviceType?.toUpperCase() === "IOS" ? "IOS" : "WEB",
+          });
+        }
       }
-    }
 
-    for (const sub of registrySubs) {
-      if (sub.endpoint && sub.p256dh && sub.auth && !targetMap.has(sub.endpoint)) {
-        targetMap.set(sub.endpoint, {
-          endpoint: sub.endpoint,
-          p256dh: sub.p256dh,
-          auth: sub.auth,
-          source: "deviceRegistry",
-          platform: "WEB",
-        });
+      for (const sub of registrySubs) {
+        if (sub.endpoint && sub.p256dh && sub.auth && !targetMap.has(sub.endpoint)) {
+          targetMap.set(sub.endpoint, {
+            endpoint: sub.endpoint,
+            p256dh: sub.p256dh,
+            auth: sub.auth,
+            source: "deviceRegistry",
+            platform: "WEB",
+          });
+        }
       }
     }
 
@@ -140,7 +177,7 @@ export async function POST(req: Request) {
         vibrate: [200, 100, 200],
         requireInteraction: true,
         renotify: true,
-        tag: `test-${userId}`,
+        tag: stableTag,
         data: {
           url,
           unreadCount,

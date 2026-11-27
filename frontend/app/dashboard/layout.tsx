@@ -5,7 +5,6 @@ import Sidebar from "@/frontend/components/Sidebar";
 import Topbar from "@/frontend/components/Topbar";
 import styles from "./layout.module.css";
 import { getSystemSettings } from "@/backend/api/actions/dashboard/admin/settings/actions";
-import { getUnifiedNotificationsAction } from "@/backend/api/actions/notifications/unifiedNotificationActions";
 
 import { SettingsProvider } from "@/frontend/contexts/SettingsContext";
 import NavigationProgressBar from "@/frontend/components/NavigationProgressBar";
@@ -43,12 +42,12 @@ export default async function DashboardLayout({
   const displayName = session.user.name || "User";
   const notificationsEnabled = session.user.notificationsEnabled ?? true;
 
-  // Preload system settings and active unread notifications in parallel during layout SSR
-  // This enables NotificationPopupModal to render instantly without client fetch delay
-  const [settings, initialNotifications] = await Promise.all([
+  // Non-blocking fast-path: race system settings with 120ms timeout; notifications load client-side after first paint
+  const settings = await Promise.race([
     getSystemSettings().catch(() => ({} as Record<string, string>)),
-    getUnifiedNotificationsAction({ unreadOnly: true }).catch(() => []),
+    new Promise<Record<string, string>>((resolve) => setTimeout(() => resolve({}), 120)),
   ]);
+  const initialNotifications: any[] = [];
 
   return (
     <SettingsProvider settings={settings}>

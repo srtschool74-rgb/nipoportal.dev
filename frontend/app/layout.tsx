@@ -234,8 +234,7 @@ export default async function RootLayout({
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
         />
-        {/* OneSignal Web Push SDK v16 */}
-        <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer />
+        {/* OneSignal Web Push SDK v16 (deferred until after load/idle so it never blocks first paint) */}
         <script
           dangerouslySetInnerHTML={{
             __html: `
@@ -255,6 +254,30 @@ export default async function RootLayout({
                     console.debug("[OneSignal] Non-fatal init skipped:", err);
                   }
                 });
+                function loadOneSignalSdk() {
+                  if (document.querySelector('script[data-onesignal-sdk="true"]')) return;
+                  var s = document.createElement("script");
+                  s.src = "https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js";
+                  s.async = true;
+                  s.defer = true;
+                  s.setAttribute("data-onesignal-sdk", "true");
+                  document.head.appendChild(s);
+                }
+                if (document.readyState === "complete") {
+                  if ("requestIdleCallback" in window) {
+                    window.requestIdleCallback(loadOneSignalSdk, { timeout: 2500 });
+                  } else {
+                    setTimeout(loadOneSignalSdk, 800);
+                  }
+                } else {
+                  window.addEventListener("load", function() {
+                    if ("requestIdleCallback" in window) {
+                      window.requestIdleCallback(loadOneSignalSdk, { timeout: 2500 });
+                    } else {
+                      setTimeout(loadOneSignalSdk, 800);
+                    }
+                  }, { once: true });
+                }
               })();
             `,
           }}

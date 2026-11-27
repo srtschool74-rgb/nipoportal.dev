@@ -4,7 +4,7 @@ import styles from "./Topbar.module.css";
 import { usePathname, useRouter } from "next/navigation";
 import ThemeToggle from "./ThemeToggle";
 import { Bell, Send, CheckCircle2 } from "lucide-react";
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { setAppBadgeCount, clearAppBadgeCount } from "@/frontend/lib/pwa/badgeManager";
 import RoleSwitcher from "@/frontend/components/auth/RoleSwitcher";
 import { getUserInitials, formatDisplayName } from "@/frontend/lib/initials";
@@ -41,13 +41,16 @@ export default function Topbar({
   const [unreadCount, setUnreadCount] = useState<number>(0);
   const [hasBusAlert, setHasBusAlert] = useState<boolean>(false);
   const [isTestingPush, setIsTestingPush] = useState<boolean>(false);
+  const isTestingPushRef = useRef<boolean>(false);
   const [testPushSuccess, setTestPushSuccess] = useState<boolean>(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const handleTestLockScreenNotification = async () => {
+    if (isTestingPushRef.current) return;
+    isTestingPushRef.current = true;
     setIsTestingPush(true);
     try {
-      // Proactively ensure current device subscription is synced before test dispatch
+      // Ensure current device has permission & is subscribed before server dispatch
       if (typeof window !== "undefined" && "serviceWorker" in navigator) {
         try {
           if (typeof Notification !== "undefined" && Notification.permission !== "granted") {
@@ -55,7 +58,6 @@ export default function Topbar({
             if (perm !== "granted") {
               setToastMessage("⚠️ Please allow notifications to receive alerts on this device.");
               setTimeout(() => setToastMessage(null), 3500);
-              setIsTestingPush(false);
               return;
             }
           }
@@ -100,28 +102,16 @@ export default function Topbar({
               }
 
               if (subJson.endpoint && p256dh && auth) {
-                await Promise.allSettled([
-                  fetch("/api/push/subscribe", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                      endpoint: subJson.endpoint,
-                      keys: { p256dh, auth },
-                      platform: /android/i.test(navigator.userAgent) ? "ANDROID" : /iphone|ipad/i.test(navigator.userAgent) ? "IOS" : "WEB",
-                      userAgent: navigator.userAgent,
-                    }),
+                await fetch("/api/push/subscribe", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    endpoint: subJson.endpoint,
+                    keys: { p256dh, auth },
+                    platform: /android/i.test(navigator.userAgent) ? "ANDROID" : /iphone|ipad/i.test(navigator.userAgent) ? "IOS" : "WEB",
+                    userAgent: navigator.userAgent,
                   }),
-                  fetch("/api/notifications/push/subscribe", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                      endpoint: subJson.endpoint,
-                      keys: { p256dh, auth },
-                      userAgent: navigator.userAgent,
-                      deviceName: /android/i.test(navigator.userAgent) ? "Android Chrome PWA" : /iphone/i.test(navigator.userAgent) ? "iPhone Safari PWA" : "Desktop PWA",
-                    }),
-                  }),
-                ]);
+                }).catch(() => {});
               }
             }
           }
@@ -130,58 +120,38 @@ export default function Topbar({
         }
       }
 
-      // Trigger immediate native system notification on this device
-      try {
-        if (typeof Notification !== "undefined" && Notification.permission === "granted") {
-          const notifTitle = "🔔 SRT Universal School";
-          const notifBody = `${user.name || "Administrator"}: System notifications & lock-screen alerts are fully active!`;
-          if (navigator.serviceWorker && "getRegistration" in navigator.serviceWorker) {
-            const reg = await navigator.serviceWorker.ready;
-            if (reg && "showNotification" in reg) {
-              await reg.showNotification(notifTitle, {
-                body: notifBody,
-                icon: "/icon-192x192.png",
-                badge: "/badge-72x72.png",
-                vibrate: [200, 100, 200],
-                tag: "srt-system-test-alert",
-              } as any);
-            } else {
-              new Notification(notifTitle, { body: notifBody, icon: "/icon-192x192.png" });
-            }
-          } else {
-            new Notification(notifTitle, { body: notifBody, icon: "/icon-192x192.png" });
-          }
-        }
-      } catch (osErr) {
-        console.warn("[Topbar] Native notification display note:", osErr);
-      }
+      // Generate a unique idempotency key per click; server dispatches ONE notification strictly to this admin
+      const idempotencyKey =
+        typeof crypto !== "undefined" && "randomUUID" in crypto
+          ? crypto.randomUUID()
+          : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 
-      // Test Push button sends strictly to the logged-in admin's own devices, NEVER broadcasting
-      const isBroadcast = false;
       const res = await fetch("/api/push/test", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           title: "🔔 SRT Portal Alert",
-          message: `${user.name || "Administrator"}: Lock-screen & system push alerts are active on your device!`,
+          message: `${user.name || "Administrator"}: Test push alert is active on your device!`,
           url: "/dashboard",
           broadcast: false,
+          idempotencyKey,
         }),
       });
       const data = await res.json().catch(() => ({}));
 
       if (res.ok && data.success) {
         setTestPushSuccess(true);
-        setToastMessage("🔔 Lock-screen test notification sent to your device!");
+        setToastMessage("🔔 Test notification sent to your device!");
         setTimeout(() => setTestPushSuccess(false), 2500);
       } else {
-        setToastMessage("🔔 Lock-screen test notification sent to your device!");
+        setToastMessage(data?.error || "⚠️ Could not send test notification.");
       }
       setTimeout(() => setToastMessage(null), 3500);
     } catch {
-      setToastMessage("🔔 Notification sent!");
+      setToastMessage("⚠️ Network error while sending test notification.");
       setTimeout(() => setToastMessage(null), 3000);
     } finally {
+      isTestingPushRef.current = false;
       setIsTestingPush(false);
     }
   };

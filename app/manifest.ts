@@ -4,12 +4,12 @@ export const dynamic = "force-static";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    id: "/",
+    id: "/dashboard",
     name: "SRT Universal School Portal",
     short_name: "SRT Portal",
     description:
       "Official Academic & Management Portal of SRT Universal School. Access school records, attendance, report cards, announcements, and administrative services.",
-    start_url: "/",
+    start_url: "/dashboard",
     scope: "/",
     display: "standalone",
     display_override: ["standalone", "window-controls-overlay", "minimal-ui"],

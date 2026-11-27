@@ -234,7 +234,7 @@ self.addEventListener("fetch", (event) => {
       (async () => {
         try {
           const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 6000);
+          const timeoutId = setTimeout(() => controller.abort(), 2500);
           const networkResponse = await fetch(request, { signal: controller.signal });
           clearTimeout(timeoutId);
           return networkResponse;
