@@ -32,9 +32,6 @@ export default function AdminDashboardStatsGrid({
           <div className={styles.statInfo}>
             <span className={styles.statLabel}>Total Students</span>
             <span className={styles.statValue}>{stats.students.activeStudents}</span>
-            <span style={{ fontSize: "0.72rem", color: "var(--text-secondary)" }}>
-              Active enrolled{stats.students.inactiveOrGraduatedStudents > 0 ? ` · ${stats.students.allStudentsIncludingInactive} total` : ""}
-            </span>
           </div>
         </div>
       </Link>
@@ -47,7 +44,6 @@ export default function AdminDashboardStatsGrid({
           <div className={styles.statInfo}>
             <span className={styles.statLabel}>Total Teachers</span>
             <span className={styles.statValue}>{stats.teachers.activeTeachers}</span>
-            <span style={{ fontSize: "0.72rem", color: "var(--text-secondary)" }}>Active faculty accounts</span>
           </div>
         </div>
       </Link>
@@ -60,9 +56,6 @@ export default function AdminDashboardStatsGrid({
           <div className={styles.statInfo}>
             <span className={styles.statLabel}>Total Parents</span>
             <span className={styles.statValue}>{stats.parents.totalParents}</span>
-            <span style={{ fontSize: "0.72rem", color: "var(--text-secondary)" }}>
-              {stats.parents.activeParents} active with linked student
-            </span>
           </div>
         </div>
       </Link>
@@ -75,9 +68,6 @@ export default function AdminDashboardStatsGrid({
           <div className={styles.statInfo}>
             <span className={styles.statLabel}>Total Classes</span>
             <span className={styles.statValue}>{stats.classes.totalSections}</span>
-            <span style={{ fontSize: "0.72rem", color: "var(--text-secondary)" }}>
-              {stats.classes.distinctClasses} levels · {stats.classes.totalSections} class-sections
-            </span>
           </div>
         </div>
       </Link>
@@ -90,9 +80,6 @@ export default function AdminDashboardStatsGrid({
           <div className={styles.statInfo}>
             <span className={styles.statLabel}>Total Subjects</span>
             <span className={styles.statValue}>{stats.subjects.distinctSubjects}</span>
-            <span style={{ fontSize: "0.72rem", color: "var(--text-secondary)" }}>
-              {stats.subjects.distinctSubjects} distinct · {stats.subjects.totalAllocations} allocations
-            </span>
           </div>
         </div>
       </Link>

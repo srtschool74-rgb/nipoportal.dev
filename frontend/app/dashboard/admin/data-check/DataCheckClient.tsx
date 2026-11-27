@@ -182,7 +182,6 @@ export default function DataCheckClient({ initialReport }: DataCheckClientProps)
             <Users size={14} /> Active Students
           </div>
           <div style={{ fontSize: "1.6rem", fontWeight: 700, marginTop: "0.35rem" }}>{counts.students.activeStudents}</div>
-          <div style={{ fontSize: "0.72rem", color: "var(--text-secondary)" }}>Day Scholars: {counts.students.dayScholars} · Hostel: {counts.students.hostelers}</div>
         </Link>
 
         <Link href="/dashboard/admin/teachers" style={{ textDecoration: "none", color: "inherit", background: "var(--card-bg)", border: "1px solid var(--border-color)", borderRadius: "12px", padding: "1rem" }}>
@@ -190,7 +189,6 @@ export default function DataCheckClient({ initialReport }: DataCheckClientProps)
             <Briefcase size={14} /> Active Teachers
           </div>
           <div style={{ fontSize: "1.6rem", fontWeight: 700, marginTop: "0.35rem" }}>{counts.teachers.activeTeachers}</div>
-          <div style={{ fontSize: "0.72rem", color: "var(--text-secondary)" }}>All faculty: {counts.teachers.allTeachersIncludingInactive}</div>
         </Link>
 
         <Link href="/dashboard/admin/parents" style={{ textDecoration: "none", color: "inherit", background: "var(--card-bg)", border: "1px solid var(--border-color)", borderRadius: "12px", padding: "1rem" }}>
@@ -198,7 +196,6 @@ export default function DataCheckClient({ initialReport }: DataCheckClientProps)
             <Users size={14} /> Total Parents
           </div>
           <div style={{ fontSize: "1.6rem", fontWeight: 700, marginTop: "0.35rem" }}>{counts.parents.totalParents}</div>
-          <div style={{ fontSize: "0.72rem", color: "var(--text-secondary)" }}>Active w/ child: {counts.parents.activeParents}</div>
         </Link>
 
         <Link href="/dashboard/admin/classes" style={{ textDecoration: "none", color: "inherit", background: "var(--card-bg)", border: "1px solid var(--border-color)", borderRadius: "12px", padding: "1rem" }}>
@@ -206,7 +203,6 @@ export default function DataCheckClient({ initialReport }: DataCheckClientProps)
             <GraduationCap size={14} /> Class-Sections
           </div>
           <div style={{ fontSize: "1.6rem", fontWeight: 700, marginTop: "0.35rem" }}>{counts.classes.totalSections}</div>
-          <div style={{ fontSize: "0.72rem", color: "var(--text-secondary)" }}>{counts.classes.distinctClasses} class levels</div>
         </Link>
 
         <Link href="/dashboard/admin/subjects" style={{ textDecoration: "none", color: "inherit", background: "var(--card-bg)", border: "1px solid var(--border-color)", borderRadius: "12px", padding: "1rem" }}>
@@ -214,7 +210,6 @@ export default function DataCheckClient({ initialReport }: DataCheckClientProps)
             <BookOpen size={14} /> Distinct Subjects
           </div>
           <div style={{ fontSize: "1.6rem", fontWeight: 700, marginTop: "0.35rem" }}>{counts.subjects.distinctSubjects}</div>
-          <div style={{ fontSize: "0.72rem", color: "var(--text-secondary)" }}>{counts.subjects.totalAllocations} allocations</div>
         </Link>
       </div>
 

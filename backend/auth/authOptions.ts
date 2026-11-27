@@ -235,7 +235,9 @@ export function getAuthOptions(): NextAuthOptions {
       if (user) {
         token.role = user.role;
         token.id = user.id;
-        token.name = user.name ? user.name.trim() : token.name;
+        token.name = user.name
+          ? user.name.replace(/\s*\(super\s*admin\)\s*/gi, " ").replace(/\s+/g, " ").trim()
+          : token.name;
         token.theme = user.theme;
         token.notificationsEnabled = user.notificationsEnabled;
         token.sessionVersion = (user as any).sessionVersion || 1;
@@ -262,7 +264,10 @@ export function getAuthOptions(): NextAuthOptions {
             token.revokedReason = validation.reason || "LOGOUT";
           } else if (validation.user) {
             if (validation.user.name) {
-              token.name = validation.user.name;
+              token.name = String(validation.user.name)
+                .replace(/\s*\(super\s*admin\)\s*/gi, " ")
+                .replace(/\s+/g, " ")
+                .trim();
             }
             // Populate availableRoles on token only if missing
             if (!token.availableRoles || !Array.isArray(token.availableRoles) || token.availableRoles.length === 0) {

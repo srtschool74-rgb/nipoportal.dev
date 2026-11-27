@@ -8,7 +8,7 @@ import { deactivateUser, activateUser, activateAllUsers, deleteUser, forceLogout
 import { User, Teacher, Parent } from "@prisma/client";
 import { useConfirm } from "@/frontend/components/ui/ConfirmDialog";
 import { SearchBar, ResultsContainer, Modal } from "@/frontend/components/ui";
-import { getUserInitials } from "@/frontend/lib/initials";
+import { getUserInitials, formatDisplayName } from "@/frontend/lib/initials";
 
 import { MoreVertical, Eye, Trash2, Loader2 } from "lucide-react";
 
@@ -205,7 +205,7 @@ export default function UserListClient({
                       {getUserInitials(user.name)}
                     </div>
                     <div>
-                      <div>{user.name}</div>
+                      <div>{formatDisplayName(user.name)}</div>
                       {user.dateOfBirth ? (
                         <div style={{ fontSize: '0.72rem', color: 'var(--primary)', fontWeight: 500 }}>
                           🎂 {new Date(user.dateOfBirth).toLocaleDateString('en-GB')}
