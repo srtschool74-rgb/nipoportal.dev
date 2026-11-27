@@ -7,6 +7,7 @@ import {
   GraduationCap, BookOpen, ArrowRight, Bell, Filter, Send
 } from "lucide-react";
 import BroadcastModal from "@/frontend/components/chat/BroadcastModal";
+import { getUserInitials } from "@/frontend/lib/initials";
 import { Class } from "@prisma/client";
 
 export type TeacherContact = {
@@ -488,7 +489,7 @@ export default function AdminMessagesClient({
                       fontSize: "1rem",
                       flexShrink: 0
                     }}>
-                      {teacher.name.charAt(0).toUpperCase()}
+                      {getUserInitials(teacher.name, "T")}
                     </div>
 
                     <div style={{ flex: 1, minWidth: 0 }}>
@@ -615,7 +616,7 @@ export default function AdminMessagesClient({
                       fontSize: "1rem",
                       flexShrink: 0
                     }}>
-                      {parent.name.charAt(0).toUpperCase()}
+                      {getUserInitials(parent.name, "P")}
                     </div>
 
                     <div style={{ flex: 1, minWidth: 0 }}>

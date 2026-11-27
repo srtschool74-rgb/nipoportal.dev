@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import styles from "./TeacherReportCardsClient.module.css";
+import { getUserInitials } from "@/frontend/lib/initials";
 import {
   createAndSendReportCardAction,
   deleteReportCardAction,
@@ -851,7 +852,7 @@ export default function TeacherReportCardsClient({
               <div className={styles.studentCard}>
                 <div className={styles.studentMeta}>
                   <div className={styles.studentAvatar}>
-                    {currentStudent.name.charAt(0)}
+                    {getUserInitials(currentStudent.name, "S")}
                   </div>
                   <div>
                     <h3 style={{ margin: 0, fontSize: "1.05rem", fontWeight: 700 }}>

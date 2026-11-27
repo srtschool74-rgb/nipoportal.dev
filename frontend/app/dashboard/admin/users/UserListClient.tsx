@@ -8,6 +8,7 @@ import { deactivateUser, activateUser, activateAllUsers, deleteUser, forceLogout
 import { User, Teacher, Parent } from "@prisma/client";
 import { useConfirm } from "@/frontend/components/ui/ConfirmDialog";
 import { SearchBar, ResultsContainer, Modal } from "@/frontend/components/ui";
+import { getUserInitials } from "@/frontend/lib/initials";
 
 import { MoreVertical, Eye, Trash2, Loader2 } from "lucide-react";
 
@@ -201,7 +202,7 @@ export default function UserListClient({
                 <td style={{ padding: "1rem", fontSize: '0.875rem', fontWeight: 500 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                     <div style={{ width: 32, height: 32, borderRadius: '50%', backgroundColor: 'rgba(99, 102, 241, 0.1)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.75rem', fontWeight: 600 }}>
-                      {user.name.charAt(0).toUpperCase()}
+                      {getUserInitials(user.name)}
                     </div>
                     <div>
                       <div>{user.name}</div>

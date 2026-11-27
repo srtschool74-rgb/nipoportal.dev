@@ -4,6 +4,7 @@ import { useState, useMemo, useEffect } from "react";
 import type { TeacherStatsSummary } from "@/shared/types/stats";
 import { notifyStatsUpdated } from "@/frontend/hooks/useStatsLiveRefresh";
 import { useRouter } from "next/navigation";
+import { getUserInitials } from "@/frontend/lib/initials";
 import {
   Search, Plus, LayoutGrid, List, User, Mail, Phone, BookOpen,
   Calendar, CheckCircle2, XCircle, MoreVertical, Edit2, ShieldAlert,
@@ -418,12 +419,7 @@ export default function TeacherListClient({
           }}
         >
           {filteredAndSortedTeachers.map((teacher) => {
-            const initials = (teacher.user.name || "T")
-              .split(" ")
-              .map((n) => n[0])
-              .join("")
-              .slice(0, 2)
-              .toUpperCase();
+            const initials = getUserInitials(teacher.user.name, "T");
 
             return (
               <div

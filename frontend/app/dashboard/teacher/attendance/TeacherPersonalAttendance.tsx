@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import { getUserInitials } from "@/frontend/lib/initials";
 import {
   UserCheck,
   Calendar,
@@ -277,7 +278,7 @@ export default function TeacherPersonalAttendance({
       <div className={styles.headerCard}>
         <div className={styles.teacherProfile}>
           <div className={styles.avatarBox}>
-            {teacherInfo.name.charAt(0).toUpperCase()}
+            {getUserInitials(teacherInfo.name, "T")}
           </div>
           <div className={styles.profileInfo}>
             <h2 className={styles.profileName}>

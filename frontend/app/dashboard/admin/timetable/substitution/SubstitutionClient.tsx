@@ -2,6 +2,7 @@
 
 import { useState, useTransition, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { getUserInitials } from "@/frontend/lib/initials";
 import {
   Calendar as CalendarIcon,
   UserX,
@@ -742,7 +743,7 @@ export default function SubstitutionClient({
                   >
                     <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
                       <div style={{ width: "36px", height: "36px", borderRadius: "50%", background: "var(--primary)", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: "0.85rem", flexShrink: 0 }}>
-                        {teacher.name.charAt(0)}
+                        {getUserInitials(teacher.name, "T")}
                       </div>
                       <div>
                         <div style={{ fontWeight: 700, fontSize: "0.9rem" }}>{teacher.name}</div>

@@ -7,6 +7,7 @@ import { ArrowLeft, TrendingUp, BookOpen, CheckCircle2, XCircle, School } from "
 import AssignTeacherDropdown from "./AssignTeacherDropdown";
 
 import EditSubjectButton from "./EditSubjectButton";
+import { getUserInitials } from "@/frontend/lib/initials";
 
 export default async function SubjectDetailsPage({
   params
@@ -298,7 +299,7 @@ export default async function SubjectDetailsPage({
                   fontSize: '0.9rem',
                   flexShrink: 0
                 }}>
-                  {item.teacher.user.name.charAt(0)}
+                  {getUserInitials(item.teacher.user.name, "T")}
                 </div>
                 <div style={{ flex: 1, minWidth: '140px' }}>
                   <h4 style={{ fontWeight: 600, margin: 0, fontSize: '0.925rem' }}>{item.teacher.user.name}</h4>

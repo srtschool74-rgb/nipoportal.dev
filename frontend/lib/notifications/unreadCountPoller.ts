@@ -138,3 +138,4 @@ export function updateUnreadStatsLocally(unreadCount: number): void {
     } catch {}
   });
 }
+

@@ -13,6 +13,7 @@ import {
   MessageSquare
 } from "lucide-react";
 import ChatMessageItem, { ChatMessage } from "./ChatMessageItem";
+import { getUserInitials } from "@/frontend/lib/initials";
 import ChatComposer from "./ChatComposer";
 import { useConfirm } from "@/frontend/components/ui/ConfirmDialog";
 import { syncAppBadgeWithServer } from "@/frontend/lib/pwa/badgeManager";
@@ -534,7 +535,7 @@ export default function ChatThreadClient({
             flexShrink: 0,
             border: "1px solid rgba(99, 102, 241, 0.2)",
           }}>
-            {otherUser.name.charAt(0).toUpperCase()}
+            {getUserInitials(otherUser.name)}
           </div>
 
           {/* Name & Online Status */}

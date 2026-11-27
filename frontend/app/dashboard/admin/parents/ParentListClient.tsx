@@ -10,6 +10,7 @@ import { useConfirm } from "@/frontend/components/ui/ConfirmDialog";
 import type { ParentStatsSummary } from "@/shared/types/stats";
 import { notifyStatsUpdated } from "@/frontend/hooks/useStatsLiveRefresh";
 import { SearchBar, ResultsContainer } from "@/frontend/components/ui";
+import { getUserInitials } from "@/frontend/lib/initials";
 
 type ParentWithRelations = Parent & {
   user: User;
@@ -251,7 +252,7 @@ export default function ParentListClient({
                   <td style={{ padding: "1rem", fontSize: '0.875rem', fontWeight: 500 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                       <div style={{ width: 32, height: 32, borderRadius: '50%', backgroundColor: 'var(--success-bg)', color: "var(--success)", display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.75rem', fontWeight: 600 }}>
-                        {parent.user.name.charAt(0).toUpperCase()}
+                        {getUserInitials(parent.user.name, "P")}
                       </div>
                       {parent.user.name}
                     </div>

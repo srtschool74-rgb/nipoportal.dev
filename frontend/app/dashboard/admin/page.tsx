@@ -11,6 +11,7 @@ import { startOfSchoolDay, endOfSchoolDay, getSchoolNow } from "@/lib/time";
 import { getAdminDashboardSummary, getParentStats, summarizeAttendanceRecords, computeStudentExamResult } from "@/backend/services/stats";
 import { countSchoolWorkingDays, getEffectiveAcademicYearRange } from "@/backend/lib/services/attendanceCalculation";
 import AdminDashboardStatsGrid from "@/frontend/components/admin/AdminDashboardStatsGrid";
+import { getUserInitials } from "@/frontend/lib/initials";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -503,7 +504,7 @@ export default async function AdminDashboardPage({
                 </h3>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1.25rem', alignItems: 'center' }}>
                   <div style={{ width: '70px', height: '70px', borderRadius: '50%', background: 'var(--primary-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.75rem', color: 'var(--primary)', flexShrink: 0 }}>
-                    {selectedClassData.teacher.user.name.charAt(0)}
+                    {getUserInitials(selectedClassData.teacher.user.name, "T")}
                   </div>
                   <div style={{ flex: '1 1 200px', minWidth: 0 }}>
                     <h4 style={{ fontSize: '1.2rem', fontWeight: 600, margin: 0, overflowWrap: 'anywhere' }}>{selectedClassData.teacher.user.name}</h4>

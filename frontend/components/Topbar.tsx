@@ -7,6 +7,7 @@ import { Bell, Send, CheckCircle2 } from "lucide-react";
 import { useEffect, useState, useCallback } from "react";
 import { setAppBadgeCount, clearAppBadgeCount } from "@/frontend/lib/pwa/badgeManager";
 import RoleSwitcher from "@/frontend/components/auth/RoleSwitcher";
+import { getUserInitials } from "@/frontend/lib/initials";
 import {
   getUnreadNotificationStats,
   subscribeToUnreadStats,
@@ -391,7 +392,7 @@ export default function Topbar({
           <span className={styles.userName}>{user?.name}</span>
           <span className={styles.userRole}>{user?.role}</span>
         </div>
-        <div className={styles.avatar}>{user?.name?.charAt(0) || "U"}</div>
+        <div className={styles.avatar}>{getUserInitials(user?.name)}</div>
       </div>
 
       {/* Floating non-intrusive toast - Zero browser alert popups */}

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useTransition, useMemo } from "react";
+import { getUserInitials } from "@/frontend/lib/initials";
 import {
   Calendar,
   Check,
@@ -269,11 +270,7 @@ export default function MissingDobStudio({
     }
   };
 
-  const getInitials = (name: string) => {
-    const parts = name.trim().split(" ");
-    if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
-    return name.slice(0, 2).toUpperCase();
-  };
+  const getInitials = (name: string) => getUserInitials(name);
 
   const buildWhatsAppRequestLink = (s: StudentDobRecord) => {
     if (!s.parentPhone) return "#";

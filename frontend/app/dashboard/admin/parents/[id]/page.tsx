@@ -5,6 +5,7 @@ import styles from "../../../dashboard.module.css";
 import Link from "next/link";
 import { ArrowLeft, Phone, Mail, GraduationCap } from "lucide-react";
 import { notFound } from "next/navigation";
+import { getUserInitials } from "@/frontend/lib/initials";
 
 export default async function ParentDetailsPage({
   params
@@ -46,7 +47,7 @@ export default async function ParentDetailsPage({
         <div style={{ background: 'var(--card-bg)', borderRadius: '12px', padding: '1.5rem', border: '1px solid var(--border-color)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem' }}>
             <div style={{ width: 64, height: 64, borderRadius: '50%', backgroundColor: "var(--primary)", color: "var(--primary-fg)", display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.5rem', fontWeight: 600 }}>
-              {parent.user.name.charAt(0).toUpperCase()}
+              {getUserInitials(parent.user.name, "P")}
             </div>
             <div>
               <h2 style={{ margin: 0, fontSize: '1.25rem' }}>{parent.user.name}</h2>

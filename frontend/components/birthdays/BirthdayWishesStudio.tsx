@@ -2,6 +2,7 @@
 
 import React, { useState, useTransition } from "react";
 import Link from "next/link";
+import { getUserInitials } from "@/frontend/lib/initials";
 import {
   Calendar,
   Download,
@@ -155,11 +156,7 @@ export default function BirthdayWishesStudio({
     return `https://wa.me/${formattedPhone}?text=${text}`;
   };
 
-  const getInitials = (name: string) => {
-    const parts = name.trim().split(" ");
-    if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
-    return name.slice(0, 2).toUpperCase();
-  };
+  const getInitials = (name: string) => getUserInitials(name);
 
   const completionPercent = totalStudents > 0 
     ? Math.round(((totalStudents - missingDobCount) / totalStudents) * 100) 
