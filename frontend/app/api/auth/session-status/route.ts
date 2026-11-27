@@ -30,7 +30,7 @@ export async function GET(req: NextRequest) {
     const token = await timer.measure("auth-token", () =>
       getToken({
         req,
-        secret: process.env.NEXTAUTH_SECRET,
+        secret: process.env.NEXTAUTH_SECRET || process.env.SUPABASE_JWT_SECRET,
       })
     );
 
@@ -130,7 +130,7 @@ export async function POST(req: NextRequest) {
     const token = await timer.measure("auth-token", () =>
       getToken({
         req,
-        secret: process.env.NEXTAUTH_SECRET,
+        secret: process.env.NEXTAUTH_SECRET || process.env.SUPABASE_JWT_SECRET,
       })
     );
 

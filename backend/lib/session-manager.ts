@@ -139,6 +139,7 @@ export async function validateSession(sessionId: string): Promise<ValidateSessio
         user: {
           select: {
             id: true,
+            name: true,
             role: true,
             status: true,
             sessionVersion: true,

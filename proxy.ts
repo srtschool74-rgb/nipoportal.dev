@@ -262,7 +262,7 @@ export async function proxy(req: NextRequest) {
   ) {
     const token = await getToken({
       req,
-      secret: process.env.NEXTAUTH_SECRET,
+      secret: process.env.NEXTAUTH_SECRET || process.env.SUPABASE_JWT_SECRET,
     });
 
     if (token && token.id && !token.isRevoked) {
@@ -293,7 +293,7 @@ export async function proxy(req: NextRequest) {
   if (isProtectedPage) {
     const token = await getToken({
       req,
-      secret: process.env.NEXTAUTH_SECRET,
+      secret: process.env.NEXTAUTH_SECRET || process.env.SUPABASE_JWT_SECRET,
     });
 
     // Not authenticated
@@ -332,6 +332,31 @@ export async function proxy(req: NextRequest) {
       });
 
       return applySecurityHeaders(response, allowedOriginHeader);
+    }
+
+    // Edge Role-Based Access Control (RBAC) for dashboard routes
+    const activeRole = String(token.role || "").toUpperCase();
+    let homeDashboard = "/dashboard";
+    if (activeRole === "ADMIN") homeDashboard = "/dashboard/admin";
+    else if (activeRole === "TEACHER") homeDashboard = "/dashboard/teacher";
+    else if (activeRole === "PARENT") homeDashboard = "/dashboard/parent";
+    else if (activeRole === "STAFF" || activeRole === "NON_TEACHING_STAFF") homeDashboard = "/staff/my-bus";
+
+    const isAdminRoute = pathname.startsWith("/dashboard/admin") || pathname.startsWith("/admin");
+    const isTeacherRoute = pathname.startsWith("/dashboard/teacher");
+    const isParentRoute = pathname.startsWith("/dashboard/parent");
+    const isStaffRoute = pathname.startsWith("/staff");
+
+    if (
+      (isAdminRoute && activeRole !== "ADMIN") ||
+      (isTeacherRoute && activeRole !== "TEACHER" && activeRole !== "ADMIN") ||
+      (isParentRoute && activeRole !== "PARENT" && activeRole !== "ADMIN") ||
+      (isStaffRoute && activeRole !== "STAFF" && activeRole !== "NON_TEACHING_STAFF" && activeRole !== "ADMIN")
+    ) {
+      return applySecurityHeaders(
+        NextResponse.redirect(new URL(homeDashboard, req.url)),
+        allowedOriginHeader
+      );
     }
   }
 

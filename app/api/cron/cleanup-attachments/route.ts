@@ -1,14 +1,35 @@
 export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
+import { getServerSession } from "next-auth/next";
+import { getAuthOptions } from "@/backend/auth/authOptions";
+import crypto from "crypto";
 import { prisma } from "@/backend/db/prisma";
 import { deleteS3Object, isS3Configured } from "@/backend/lib/storage/s3Storage";
 
+function safeCompare(a: string | null | undefined, b: string | null | undefined): boolean {
+  if (!a || !b) return false;
+  const bufA = Buffer.from(a);
+  const bufB = Buffer.from(b);
+  if (bufA.length !== bufB.length) return false;
+  return crypto.timingSafeEqual(bufA, bufB);
+}
+
 export async function GET(request: Request) {
-  const authHeader = request.headers.get("authorization");
+  const authHeader = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
   const cronSecret = process.env.CRON_SECRET;
 
-  if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+  let authorized = Boolean(cronSecret && safeCompare(authHeader, cronSecret));
+  if (!authorized) {
+    try {
+      const session = await getServerSession(getAuthOptions());
+      if (session?.user?.role === "ADMIN") {
+        authorized = true;
+      }
+    } catch {}
+  }
+
+  if (!authorized) {
     return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   }
 

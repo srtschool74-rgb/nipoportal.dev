@@ -9,6 +9,7 @@ import {
   createUserSession,
   validateSession,
   recordSessionActivity,
+  revokeSession,
 } from "@/backend/lib/session-manager";
 import { recordUserLogin } from "@/backend/services/auth/loginActivityTracker";
 import {
@@ -260,9 +261,11 @@ export function getAuthOptions(): NextAuthOptions {
             token.isRevoked = true;
             token.revokedReason = validation.reason || "LOGOUT";
           } else if (validation.user) {
-            token.name = validation.user.name;
-            // Ensure availableRoles is populated on token
-            if (!token.availableRoles || !Array.isArray(token.availableRoles) || token.availableRoles.length <= 1) {
+            if (validation.user.name) {
+              token.name = validation.user.name;
+            }
+            // Populate availableRoles on token only if missing
+            if (!token.availableRoles || !Array.isArray(token.availableRoles) || token.availableRoles.length === 0) {
               const dbRoles = await prisma.user.findUnique({
                 where: { id: validation.user.id },
                 select: {
@@ -358,6 +361,13 @@ export function getAuthOptions(): NextAuthOptions {
     },
   },
   secret: process.env.NEXTAUTH_SECRET || process.env.SUPABASE_JWT_SECRET,
+  events: {
+    async signOut({ token }) {
+      if (token?.sessionId) {
+        await revokeSession(token.sessionId as string, "LOGOUT");
+      }
+    },
+  },
   logger: {
     error(code, metadata) {
       if (code === "JWT_SESSION_ERROR") {
