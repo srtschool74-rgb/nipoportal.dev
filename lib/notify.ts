@@ -194,42 +194,49 @@ export async function sendUniversalNotification(
   // Stable deterministic tag
   const deterministicTag = tag || `notif-${options.entityId || notificationId || Date.now()}`;
 
-  // 2. Dispatch OneSignal Push
-  try {
-    const osResult = await sendOneSignalPush({
+  // 2. Dispatch OneSignal Push & Query Active Push Subscriptions in parallel for 1-2s speed
+  const [osSettled, subsSettled] = await Promise.allSettled([
+    sendOneSignalPush({
       userId,
       title,
       body,
       url,
       unreadCount,
       category,
+      tag: deterministicTag,
       additionalData: {
         tag: deterministicTag,
         notificationId,
       },
-    });
+    }),
+    Promise.all([
+      prisma.pushSubscription.findMany({
+        where: { userId, isActive: true },
+        select: { id: true, endpoint: true, p256dh: true, auth: true, platform: true, token: true },
+      }),
+      prisma.pwaSubscription.findMany({
+        where: { userId },
+        select: { id: true, endpoint: true, p256dhKey: true, authKey: true, deviceType: true },
+      }).catch(() => []),
+      prisma.deviceNotificationsRegistry.findMany({
+        where: { userId },
+        select: { id: true, endpoint: true, p256dh: true, auth: true },
+      }).catch(() => []),
+    ]),
+  ]);
+
+  if (osSettled.status === "fulfilled") {
+    const osResult = osSettled.value;
     if (osResult.success && osResult.recipients) {
       oneSignalCount = osResult.recipients;
     }
-  } catch (osErr) {
-    console.warn("[Notify] OneSignal dispatch note:", osErr);
+  } else {
+    console.warn("[Notify] OneSignal dispatch note:", osSettled.reason);
   }
 
-  // 3. Query Active Push Subscriptions across tables
-  const [primarySubs, pwaSubs, registrySubs] = await Promise.all([
-    prisma.pushSubscription.findMany({
-      where: { userId, isActive: true },
-      select: { id: true, endpoint: true, p256dh: true, auth: true, platform: true, token: true },
-    }),
-    prisma.pwaSubscription.findMany({
-      where: { userId },
-      select: { id: true, endpoint: true, p256dhKey: true, authKey: true, deviceType: true },
-    }).catch(() => []),
-    prisma.deviceNotificationsRegistry.findMany({
-      where: { userId },
-      select: { id: true, endpoint: true, p256dh: true, auth: true },
-    }).catch(() => []),
-  ]);
+  // 3. Fallback to Direct WebPush / FCM ONLY when OneSignal did not deliver (prevents duplicate notifications)
+  const [primarySubs, pwaSubs, registrySubs] =
+    subsSettled.status === "fulfilled" ? subsSettled.value : [[], [], []];
 
   const targetMap = new Map<string, any>();
   for (const s of primarySubs) {
@@ -260,7 +267,7 @@ export async function sendUniversalNotification(
 
   const subscriptions = Array.from(targetMap.values());
 
-  if (subscriptions.length > 0) {
+  if (subscriptions.length > 0 && oneSignalCount === 0) {
     const webPayload = JSON.stringify({
       title,
       body,
