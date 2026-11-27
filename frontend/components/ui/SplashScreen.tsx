@@ -50,7 +50,9 @@ export default function SplashScreen({
   const [isExiting, setIsExiting] = useState(false);
   const isExitingRef = useRef(false);
   const onCompleteRef = useRef(onComplete);
-  onCompleteRef.current = onComplete;
+  useEffect(() => {
+    onCompleteRef.current = onComplete;
+  }, [onComplete]);
   const exitTimerRef = useRef<NodeJS.Timeout | null>(null);
   const autoFinishTimerRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -82,12 +84,12 @@ export default function SplashScreen({
   useEffect(() => {
     if (!isVisible) return;
 
-    // Full cinematic animation cycle: 4.65s guarantees progress bar reaches 100% full before moving to login
-    let duration = 4650;
+    // Crisp 900ms splash animation before moving to login/dashboard
+    let duration = 900;
     try {
       const isReduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
       if (isReduced) {
-        duration = 1000; // Gentle transition for reduced motion
+        duration = 350;
       }
     } catch {}
 

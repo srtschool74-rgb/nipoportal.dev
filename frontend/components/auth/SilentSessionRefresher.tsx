@@ -41,8 +41,16 @@ export default function SilentSessionRefresher() {
     // Initial badge sync on portal launch
     syncAppBadgeWithServer().catch(() => {});
 
-    // Silent background token refresh function with native session persistence
+    // Silent background token refresh function (only on authenticated routes, throttled to 5 min)
     const silentlyRefreshToken = async () => {
+      const path = window.location.pathname || "/";
+      if (path === "/" || path.startsWith("/login")) return;
+      try {
+        const lastCheck = Number(sessionStorage.getItem("srt_last_session_refresh") || "0");
+        if (Date.now() - lastCheck < 5 * 60 * 1000) return;
+        sessionStorage.setItem("srt_last_session_refresh", String(Date.now()));
+      } catch {}
+
       try {
         const res = await fetch("/api/auth/session", {
           cache: "no-store",

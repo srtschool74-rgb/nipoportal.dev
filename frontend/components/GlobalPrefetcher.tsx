@@ -53,25 +53,27 @@ export default function GlobalPrefetcher() {
       warmDatabase();
     }
 
-    // 2. Prefetch ONLY the role dashboard matching current session (never blast all role routes at once)
-    getPersistedNativeSession()
-      .then((session) => {
-        if (session?.role) {
-          const role = session.role.toUpperCase();
-          const target =
-            role === "ADMIN"
-              ? "/dashboard/admin"
-              : role === "TEACHER"
-              ? "/dashboard/teacher"
-              : role === "PARENT"
-              ? "/dashboard/parent"
-              : role === "STAFF" || role === "NON_TEACHING_STAFF"
-              ? "/staff/my-bus"
-              : "/dashboard";
-          safePrefetch(target);
-        }
-      })
-      .catch(() => {});
+    // 2. Prefetch ONLY the role dashboard when already on an authenticated route (never poison login Router Cache)
+    if (path !== "/" && !path.startsWith("/login")) {
+      getPersistedNativeSession()
+        .then((session) => {
+          if (session?.role) {
+            const role = session.role.toUpperCase();
+            const target =
+              role === "ADMIN"
+                ? "/dashboard/admin"
+                : role === "TEACHER"
+                ? "/dashboard/teacher"
+                : role === "PARENT"
+                ? "/dashboard/parent"
+                : role === "STAFF" || role === "NON_TEACHING_STAFF"
+                ? "/staff/my-bus"
+                : "/dashboard";
+            safePrefetch(target);
+          }
+        })
+        .catch(() => {});
+    }
 
     // 3. Anticipatory Hover & Touch Prefetching for all internal links
     const handlePointerOrTouch = (e: Event) => {

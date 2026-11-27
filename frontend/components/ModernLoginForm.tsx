@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import {
@@ -75,6 +75,7 @@ export default function ModernLoginForm({
   const [isMorphing, setIsMorphing] = useState(false);
   const [showNotifQuick, setShowNotifQuick] = useState(false);
   const [isEnablingNotif, setIsEnablingNotif] = useState(false);
+  const isSubmittingRef = useRef(false);
 
   // Ensure any error immediately clears loading and morphing states to keep form visible
   useEffect(() => {
@@ -102,18 +103,9 @@ export default function ModernLoginForm({
         ) {
           setShowNotifQuick(true);
         }
-
-        // Pre-fetch all primary dashboard destinations while user enters credentials
-        try {
-          router.prefetch("/dashboard/teacher");
-          router.prefetch("/dashboard/parent");
-          router.prefetch("/dashboard/admin");
-          router.prefetch("/dashboard");
-          router.prefetch("/staff/my-bus");
-        } catch {}
       } catch {}
     }
-  }, [router]);
+  }, []);
 
   const handleEnableNotificationsQuick = async () => {
     setIsEnablingNotif(true);
@@ -175,17 +167,10 @@ export default function ModernLoginForm({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmittingRef.current) return;
+    isSubmittingRef.current = true;
     setLoading(true);
     setError("");
-
-    // Trigger system notification permission prompt if not yet granted
-    if (typeof Notification !== "undefined" && Notification.permission === "default") {
-      try {
-        await Notification.requestPermission();
-        const { requestPushPermission } = await import("@/frontend/lib/pushNotifications");
-        requestPushPermission().catch(() => {});
-      } catch {}
-    }
 
     try {
       const signInOptions: Record<string, any> = {
@@ -200,20 +185,32 @@ export default function ModernLoginForm({
 
       const res = await signIn("credentials", signInOptions);
 
-      if (res?.error) {
-        setError(formatLoginError(res.error) || "Invalid email or password. Please verify your credentials.");
+      if (!res || res.error || res.ok === false) {
+        setError(formatLoginError(res?.error) || "Invalid email or password. Please verify your credentials.");
         setLoading(false);
-      } else {
-        // Shared Element Crest Morph & 280ms Card Fade Out
-        setIsMorphing(true);
-        try {
-          sessionStorage.removeItem("srt_portal_popup_notif_dismissed");
-          sessionStorage.setItem("srt_portal_fresh_login", "true");
-          sessionStorage.setItem("srt_bento_cascade", "true");
-        } catch {}
+        isSubmittingRef.current = false;
+        return;
+      }
 
-        // Direct fast-path routing: eliminates double-redirect delay and eliminates /dashboard white loading screen
-        let target = "";
+      // Shared Element Crest Morph & 280ms Card Fade Out
+      setIsMorphing(true);
+      try {
+        sessionStorage.removeItem("srt_portal_popup_notif_dismissed");
+        sessionStorage.setItem("srt_portal_fresh_login", "true");
+        sessionStorage.setItem("srt_bento_cascade", "true");
+      } catch {}
+
+      // Safe same-origin callbackUrl check (never allow open redirects or /login loops)
+      let target = "";
+      try {
+        const params = new URLSearchParams(window.location.search);
+        const cb = params.get("callbackUrl");
+        if (cb && cb.startsWith("/") && !cb.startsWith("//") && !cb.startsWith("/login")) {
+          target = cb;
+        }
+      } catch {}
+
+      if (!target) {
         if (defaultRole) {
           target = `/dashboard/${defaultRole.toLowerCase()}`;
         } else {
@@ -230,26 +227,19 @@ export default function ModernLoginForm({
           } catch {}
 
           if (!target) {
-            const cleanLower = email.trim().toLowerCase();
-            if (cleanLower.includes("admin")) target = "/dashboard/admin";
-            else if (cleanLower.includes("teacher")) target = "/dashboard/teacher";
-            else if (cleanLower.includes("parent")) target = "/dashboard/parent";
-            else target = "/dashboard/parent";
+            target = "/dashboard";
           }
         }
-
-        // Instant Next.js Client Routing - Pre-warms target and eliminates white page reload
-        try {
-          router.prefetch(target);
-        } catch {}
-
-        router.replace(target);
       }
+
+      // Full navigation with the freshly set HttpOnly session cookie (bypasses any stale unauthenticated Router Cache)
+      window.location.replace(target);
     } catch (err: any) {
       console.error("[Login Error]", err);
       setError(err?.message && !err.message.includes("fetch") ? err.message : "An unexpected connection error occurred. Please try again.");
       setLoading(false);
       setIsMorphing(false);
+      isSubmittingRef.current = false;
     }
   };
 

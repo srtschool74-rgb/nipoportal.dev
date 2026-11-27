@@ -5,7 +5,7 @@
  * Security: Strict bypass for all /api/, NextAuth, and dynamic private data.
  */
 
-const CACHE_NAME = "srt-pwa-v19-live";
+const CACHE_NAME = "srt-pwa-v20-live";
 const PRECACHE_ASSETS = [
   "/offline.html",
   "/manifest.webmanifest",
@@ -63,19 +63,24 @@ self.addEventListener("install", (event) => {
   self.skipWaiting();
 });
 
-// 2. Activate Event: Immediately purge all outdated/broken caches & take control
+// 2. Activate Event: Immediately purge all outdated/broken caches, enable navigation preload & take control
 self.addEventListener("activate", (event) => {
   event.waitUntil(
-    caches.keys().then((keys) => {
-      return Promise.all(
-        keys.map((key) => {
-          if (key !== CACHE_NAME) {
-            console.info("[SW] Deleting obsolete cache:", key);
-            return caches.delete(key);
-          }
-        })
-      );
-    }).then(() => self.clients.claim())
+    Promise.all([
+      caches.keys().then((keys) => {
+        return Promise.all(
+          keys.map((key) => {
+            if (key !== CACHE_NAME) {
+              console.info("[SW] Deleting obsolete cache:", key);
+              return caches.delete(key);
+            }
+          })
+        );
+      }),
+      self.registration.navigationPreload
+        ? self.registration.navigationPreload.enable().catch(() => {})
+        : Promise.resolve(),
+    ]).then(() => self.clients.claim())
   );
 });
 
@@ -228,18 +233,39 @@ self.addEventListener("fetch", (event) => {
     return; // Pass through to network directly, never cache in SW or return 408
   }
 
-  // Handle HTML Page Navigations: Network-First with a 6-second timeout before offline fallback
+  // Handle HTML Page Navigations: Navigation Preload + Network-First (8.5s timeout + 1 retry)
+  // Never serve offline.html for redirects or while online unless both attempts truly fail
   if (request.mode === "navigate") {
     event.respondWith(
       (async () => {
-        try {
+        const fetchWithTimeout = async (timeoutMs) => {
           const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 2500);
-          const networkResponse = await fetch(request, { signal: controller.signal });
-          clearTimeout(timeoutId);
-          return networkResponse;
-        } catch (fetchError) {
-          console.warn("[SW] Navigation network fetch failed or timed out, using fallback:", fetchError);
+          const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+          try {
+            return await fetch(request, { signal: controller.signal });
+          } finally {
+            clearTimeout(timeoutId);
+          }
+        };
+
+        try {
+          const preloaded = await event.preloadResponse;
+          if (preloaded) {
+            return preloaded;
+          }
+          return await fetchWithTimeout(8500);
+        } catch (firstErr) {
+          // Retry once if browser reports online
+          if (typeof navigator === "undefined" || navigator.onLine !== false) {
+            try {
+              return await fetchWithTimeout(8500);
+            } catch (retryErr) {
+              console.warn("[SW] Navigation network retry failed:", retryErr);
+            }
+          } else {
+            console.warn("[SW] Device is offline during navigation:", firstErr);
+          }
+
           try {
             const cache = await caches.open(CACHE_NAME);
             const cachedOffline = await cache.match("/offline.html");
