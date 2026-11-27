@@ -223,7 +223,9 @@ export async function sendOneSignalPush(
               console.warn(`[OneSignal] ⚠️ API accepted notification (${data.id}) but delivered to 0 recipients: ${warningMsg}`);
               lastError = `RECIPIENTS_ZERO: ${warningMsg}`;
               lastData = data;
-              // Don't mark chunkDelivered, allow fallbacks or return RECIPIENTS_ZERO
+              // Auth and v2 payload succeeded; retrying Basic/v1 will still have 0 recipients, so stop immediately
+              chunkDelivered = true;
+              break;
             } else {
               console.log(
                 `[OneSignal] Push dispatched successfully via ${attempt.url}: notificationId=${data.id}, recipients=${numRecipients}`

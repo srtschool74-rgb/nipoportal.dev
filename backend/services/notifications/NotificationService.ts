@@ -285,10 +285,10 @@ export class NotificationService {
         };
       }
 
-      // 1. Primary Channel: OneSignal external_id targeting
+      // 1. Run OneSignal dispatch and WebPush subscription lookup in parallel for minimum latency
       let oneSignalDeliveredCount = 0;
-      try {
-        const osRes = await sendOneSignalPush({
+      const [osResultSettled, subsSettled] = await Promise.allSettled([
+        sendOneSignalPush({
           userId: pushAllowedUserIds,
           title,
           body,
@@ -304,12 +304,32 @@ export class NotificationService {
             image,
             ...data,
           },
-        });
+        }),
+        vapidConfigured
+          ? Promise.all([
+              prisma.pushSubscription.findMany({
+                where: { userId: { in: pushAllowedUserIds }, isActive: true },
+                select: { id: true, userId: true, endpoint: true, p256dh: true, auth: true },
+              }),
+              prisma.pwaSubscription.findMany({
+                where: { userId: { in: pushAllowedUserIds } },
+                select: { id: true, userId: true, endpoint: true, p256dhKey: true, authKey: true },
+              }).catch(() => []),
+              prisma.deviceNotificationsRegistry.findMany({
+                where: { userId: { in: pushAllowedUserIds } },
+                select: { id: true, userId: true, endpoint: true, p256dh: true, auth: true },
+              }).catch(() => []),
+            ])
+          : Promise.resolve([[], [], []] as const),
+      ]);
+
+      if (osResultSettled.status === "fulfilled") {
+        const osRes = osResultSettled.value;
         oneSignalDeliveredCount = osRes.recipients ?? 0;
         if (osRes.success && oneSignalDeliveredCount > 0) {
           pushSent += oneSignalDeliveredCount;
         }
-        await prisma.notificationDelivery.createMany({
+        prisma.notificationDelivery.createMany({
           data: pushAllowedUserIds.map((uid) => ({
             eventType: normalizedType,
             entityId: firstNotificationId || null,
@@ -331,26 +351,13 @@ export class NotificationService {
             sentAt: osRes.success && oneSignalDeliveredCount > 0 ? new Date() : null,
           })),
         }).catch(() => {});
-      } catch (osErr) {
-        console.warn("[NotificationService] OneSignal dispatch note:", osErr);
+      } else {
+        console.warn("[NotificationService] OneSignal dispatch note:", osResultSettled.reason);
       }
 
       // 2. Direct WebPush fallback when OneSignal did not cover all allowed recipients
-      if (vapidConfigured && oneSignalDeliveredCount < pushAllowedUserIds.length) {
-        const [subscriptions, pwaSubs, registrySubs] = await Promise.all([
-          prisma.pushSubscription.findMany({
-            where: { userId: { in: pushAllowedUserIds }, isActive: true },
-            select: { id: true, userId: true, endpoint: true, p256dh: true, auth: true },
-          }),
-          prisma.pwaSubscription.findMany({
-            where: { userId: { in: pushAllowedUserIds } },
-            select: { id: true, userId: true, endpoint: true, p256dhKey: true, authKey: true },
-          }).catch(() => []),
-          prisma.deviceNotificationsRegistry.findMany({
-            where: { userId: { in: pushAllowedUserIds } },
-            select: { id: true, userId: true, endpoint: true, p256dh: true, auth: true },
-          }).catch(() => []),
-        ]);
+      if (vapidConfigured && oneSignalDeliveredCount < pushAllowedUserIds.length && subsSettled.status === "fulfilled") {
+        const [subscriptions, pwaSubs, registrySubs] = subsSettled.value;
 
         const endpointMap = new Map<string, { id: string; userId: string | null; endpoint: string; p256dh: string; auth: string }>();
         for (const sub of subscriptions) {
