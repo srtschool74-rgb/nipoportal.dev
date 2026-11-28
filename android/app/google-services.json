@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "520283257490",
+    "project_id": "srt-portal-515708",
+    "storage_bucket": "srt-portal-515708.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:520283257490:android:fea44587dbe1099e21844b",
+        "android_client_info": {
+          "package_name": "com.srtportal.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "520283257490-fnd4k25a1g7tdd750lpu2bhm8qqap72m.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDxwB4uvFcBuS0zf24gzUY6cQ42FQFHVJA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "520283257490-fnd4k25a1g7tdd750lpu2bhm8qqap72m.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
